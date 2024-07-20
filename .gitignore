@@ -1,2 +1,4 @@
 bus
 projectrequiremeents
+*.pyc
+venv/*
