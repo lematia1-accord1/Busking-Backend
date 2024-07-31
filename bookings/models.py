@@ -1,73 +1,54 @@
-from django.db import models;
-from django.contrib.auth.models import AbstractUser;
+# models.py
+
+from django.db import models
+from django.contrib.auth.models import AbstractUser
 from django.utils.timezone import now
 
 class User(AbstractUser):
     # Add additional fields if needed
-    pass
+    
+    user_type = models.CharField(max_length=10, choices=(
+        ('merchant', 'Merchant'),
+        ('passenger', 'Passenger'),
+    ), default='passenger')
+    
+
+class Merchant(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    bus_company_name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.bus_company_name
+    
+
 
 class Bus(models.Model):
-    bus_names = {
-        "HB" : "Horizon Bus",
-        "BC" : "Busscar",
-        "GBC" : "Gaaga Bus Company",
-        "JEC" : "Jaguar Executive Coaches",
-        "KC" : "Kampala Coach",
-        "MBS" : "Mash Bus Services",
-        "MC" : "Modern Coast",
-        "QC" : "Queens Coach",
-        "UPB": "Uganda Post Bus",
-        "KB" : "Kalita Bus",
-        "BBC" : "Baby Coach",
-        "KH" : "Kampala Hopper",
-        "LK" : "Link Bus",
-        "NC" : "Nile Coach",
-    }
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+    license_plate = models.CharField(max_length=10, unique=True)
 
+    name = models.CharField(max_length=100)
+    total_seats = models.IntegerField()
+    available_seats = models.IntegerField(default=0)
 
-    # name = models.CharField(max_length=100)
-    name = models.CharField(max_length=100, choices=bus_names)
+    # Removed hardcoded destinations
+    # Instead, we'll store destinations as a list of strings in a TextField
+    destinations = models.TextField(blank=True)
 
-    destinations = {
-    "WT": "Kasese", # WT - westernmost Point
-    "NT": "Arua", # NT - Northernmost Point
-    "ET": "Malaba", # ET - Easternmost Point
-    "ST": "Kabale", # ST - Southernmost Point
-    "CT": "Kampala", # CT - Central / HQ Stage
-}
-    
-    destination = models.CharField(max_length=50, choices=destinations)
-
-    # https://www.theugandaguide.com/getting-around/bus-services
-
-    travel_routes = { #Bus Routes
-    "KSE": "Kasese", # WT - westernmost Point
-    "AR": "Arua", # NT - Northernmost Point
-    "ML": "Malaba", # ET - Easternmost Point
-    "KBL": "Kabale", # ST - Southernmost Point
-    "KPL": "Kampala", # CT - Central / HQ Stage
-    "MB": "Mbarara",
-    "CN": "Cyanika",
-    "NB": "Nairobi",
-    "KG": "Kigali",
-    "JB": "Juba",
-    "GM": "Goma",
-    "GL": "Gulu",
-    "SR": "Soroti",
-    "MY": "Moyo",
-    "KS": "Kisoro",
-}
-    
-    bus_routes = models.CharField(max_length=150, choices=travel_routes)
+    # Removed hardcoded travel_routes
+    # Instead, we'll store routes as a list of strings in a TextField
+    bus_routes = models.TextField(blank=True)
 
     departure_time = models.DateTimeField()
     arrival_time = models.DateTimeField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    
+
     def __str__(self):
         return self.name
 
-
+    def save(self, *args, **kwargs):
+        if not self.available_seats:
+            self.available_seats = self.total_seats
+        super().save(*args, **kwargs)
 
 class Booking(models.Model):
     bus = models.ForeignKey(Bus, related_name='bookings', on_delete=models.CASCADE)
@@ -76,5 +57,20 @@ class Booking(models.Model):
     phone = models.CharField(max_length=15)
     seats = models.IntegerField()
 
+    booking_date = models.DateTimeField(default=now)  # Add booking date
+    payment_method = models.CharField(max_length=50, blank=True)  # Add payment method
+    pickup_location = models.CharField(max_length=255, blank=True)  # Add pickup location
+    pickup_time = models.DateTimeField(blank=True)  # Add pickup time
+    expected_journey_duration = models.DurationField(blank=True)  # Add journey duration
+    destination = models.CharField(max_length=255, blank=True)  # Add destination
+    setoff_time = models.DateTimeField(blank=True)  # Add setoff time
+    expected_arrival_time = models.DateTimeField(blank=True)  # Add expected arrival time
+
     def __str__(self):
         return f"Booking by {self.name} for {self.bus.name}"
+
+class Customer(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.user.username
