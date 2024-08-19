@@ -1,8 +1,9 @@
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
-from bookings.models import Merchant
 from django.contrib.auth.models import User  # Import User model
+from bookings.models import Merchant
+
 
 class SignupTests(APITestCase):
 
