@@ -4,7 +4,19 @@ from django.utils.timezone import now
 
 class User(AbstractUser):
     # Add additional fields if needed
-    pass
+    user_type = models.CharField(max_length=10, choices=(
+        ('merchant', 'Merchant'),
+        ('passenger', 'Passenger'),
+    ), default='passenger')
+
+class Merchant(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    bus_company_name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.bus_company_name
+    
+
 
 class Bus(models.Model):
     name = models.CharField(max_length=100)
@@ -26,3 +38,9 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"Booking by {self.name} for {self.bus.name}"
+    
+class Customer(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.user.username

@@ -1,2 +1,5 @@
 bus
 projectrequiremeents
+__pycache__
+venv
+.idea
