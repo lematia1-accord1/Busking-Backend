@@ -22,11 +22,26 @@ class Bus(models.Model):
     name = models.CharField(max_length=100)
     departure_time = models.DateTimeField()
     arrival_time = models.DateTimeField()
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+    license_plate = models.CharField(max_length=10, unique=True)
+    total_seats = models.IntegerField(null=True, blank=True)
+    available_seats = models.IntegerField(default=0)
+    # Removed hardcoded travel_routes
+    # Instead, we'll store routes as a list of strings in a TextField
+    bus_routes = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     
     def __str__(self):
         return self.name
+    
+    def save(self, *args, **kwargs):
+        if not self.available_seats:
+            self.available_seats = self.total_seats
+        super().save(*args, **kwargs)
 
+    
+    class Meta:
+        verbose_name_plural = "Buses"
 
 
 class Booking(models.Model):
@@ -35,6 +50,15 @@ class Booking(models.Model):
     email = models.EmailField()
     phone = models.CharField(max_length=15)
     seats = models.IntegerField()
+    booking_date = models.DateTimeField(default=now)  # Add booking date
+    payment_method = models.CharField(max_length=50, blank=True)  # Add payment method
+    pickup_location = models.CharField(max_length=255, blank=True)  # Add pickup location
+    pickup_time = models.DateTimeField(blank=True)  # Add pickup time
+    expected_journey_duration = models.DurationField(blank=True)  # Add journey duration
+    destination = models.CharField(max_length=255, blank=True)  # Add destination
+    setoff_time = models.DateTimeField(blank=True)  # Add setoff time
+    expected_arrival_time = models.DateTimeField(blank=True)  # Add expected arrival time
+
 
     def __str__(self):
         return f"Booking by {self.name} for {self.bus.name}"
