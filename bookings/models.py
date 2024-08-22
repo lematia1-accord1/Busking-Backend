@@ -34,10 +34,15 @@ class Bus(models.Model):
     def __str__(self):
         return self.name
     
+
     def save(self, *args, **kwargs):
         if not self.available_seats:
             self.available_seats = self.total_seats
         super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name_plural = "Buses"
+
 
     
     class Meta:
