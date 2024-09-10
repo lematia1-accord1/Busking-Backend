@@ -148,8 +148,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-
-
 # Add this to manage token expiration and other JWT settings
 
 

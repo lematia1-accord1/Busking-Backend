@@ -2,6 +2,7 @@ from django.apps import AppConfig
 from django.db.models.signals import post_migrate
 from django.core.exceptions import AppRegistryNotReady
 
+
 class BookingsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'bookings'
@@ -23,43 +24,35 @@ class BookingsConfig(AppConfig):
             # Create permissions for models
             Permission.objects.get_or_create(
                 codename='add_bus',
-                name='Can add bus',
-                content_type=bus_content_type
+                defaults={'name': 'Can add bus', 'content_type': bus_content_type}
             )
             Permission.objects.get_or_create(
                 codename='change_bus',
-                name='Can change bus',
-                content_type=bus_content_type
+                defaults={'name': 'Can change bus', 'content_type': bus_content_type}
             )
             Permission.objects.get_or_create(
                 codename='delete_bus',
-                name='Can delete bus',
-                content_type=bus_content_type
+                defaults={'name': 'Can delete bus', 'content_type': bus_content_type}
             )
             Permission.objects.get_or_create(
                 codename='view_bus',
-                name='Can view bus',
-                content_type=bus_content_type
+                defaults={'name': 'Can view bus', 'content_type': bus_content_type}
             )
             Permission.objects.get_or_create(
                 codename='view_merchant',
-                name='Can view merchant',
-                content_type=merchant_content_type
+                defaults={'name': 'Can view merchant', 'content_type': merchant_content_type}
             )
             Permission.objects.get_or_create(
                 codename='view_booking',
-                name='Can view booking',
-                content_type=booking_content_type
+                defaults={'name': 'Can view booking', 'content_type': booking_content_type}
             )
             Permission.objects.get_or_create(
                 codename='view_user',
-                name='Can view user',
-                content_type=user_content_type
+                defaults={'name': 'Can view user', 'content_type': user_content_type}
             )
             Permission.objects.get_or_create(
                 codename='view_customer',
-                name='Can view customer',
-                content_type=customer_content_type
+                defaults={'name': 'Can view customer', 'content_type': customer_content_type}
             )
         except AppRegistryNotReady:
             # Handle the case where the app registry isn't ready

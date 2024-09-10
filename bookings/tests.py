@@ -1,8 +1,9 @@
-from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 from bookings.models import Merchant
-from django.contrib.auth.models import User  # Import User model
+from django.contrib.auth import get_user_model  # Corrected import for User model
+
+User = get_user_model()
 
 class SignupTests(APITestCase):
 
@@ -54,11 +55,13 @@ class SignupTests(APITestCase):
             'email': 'merchant@example.com',
             'first_name': 'Test',
             'last_name': 'Merchant',
-            'is_staff': True,
+            'user_type': 'merchant',  # Corrected field for user type
             'bus_company_name': 'Test Bus Company'
         }
         response = self.client.post('/users/', data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['username'], 'testmerchant')
-        self.assertTrue(response.data['is_staff'])
-        self.assertEqual(Merchant.objects.get(user__username='testmerchant').bus_company_name, 'Test Bus Company')
+        
+        # Check if the Merchant was created and associated correctly
+        merchant = Merchant.objects.get(user__username='testmerchant')
+        self.assertEqual(merchant.bus_company_name, 'Test Bus Company')
