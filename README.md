@@ -12,7 +12,7 @@ BusKing is a bus booking system built with React Native for the frontend and Dja
 - [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
-
++
 ## Features
 
 - User authentication (register, login, logout)
@@ -170,7 +170,6 @@ Admin: Manage buses, schedules, routes, users, and view booking statistics.
 
 2.2 User Stories
 Guest User
-
 View available buses and routes without logging in.
 Check seat availability for a specific bus route.
 Register and log in to the system.

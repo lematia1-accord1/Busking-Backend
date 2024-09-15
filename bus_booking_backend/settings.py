@@ -23,6 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-@*d0(4)z&)d#9ctm6f(@7vmf_iqil-9#2-n_g7k0yl&o9*#wpl'
+# EasyPay Mobile Money API settings
+EASYPAY_MOBILE_MONEY_API_KEY = 'your_mobile_money_api_key'
+EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

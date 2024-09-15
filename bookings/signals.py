@@ -5,33 +5,37 @@ from .models import CustomUser
 
 @receiver(post_save, sender=CustomUser)
 def assign_user_role(sender, instance, created, **kwargs):
+    """
+    Signal to assign role-based permissions to a user upon creation.
+    """
     if created:
-        permissions_to_add = []
-        
-        if instance.is_guest():
-            # Assign guest permissions
-            permissions_to_add = [
-                'can_view_bus',
-                'can_view_booking',
-            ]
-        elif instance.is_registered():
-            # Assign registered user permissions
-            permissions_to_add = [
-                'can_view_bus',
-                'can_book_ticket',
-                'can_view_booking_history',
-                'can_cancel_booking',
-                'can_manage_profile',
-            ]
-        elif instance.is_admin():
-            # Assign admin permissions
-            permissions_to_add = [perm.codename for perm in Permission.objects.all()]
+        # Dictionary mapping user roles to their respective permissions
+        role_permissions = {
+            'guest': ['can_view_bus', 'can_view_booking'],
+            'registered': [
+                'can_view_bus', 'can_book_ticket', 'can_view_booking_history',
+                'can_cancel_booking', 'can_manage_profile'
+            ],
+            'admin': [perm.codename for perm in Permission.objects.all()]  # Admin gets all permissions
+        }
 
-        # Add permissions to the user
-        for perm_codename in permissions_to_add:
-            try:
-                permission = Permission.objects.get(codename=perm_codename)
-                instance.user_permissions.add(permission)
-            except Permission.DoesNotExist:
-                # Handle the case where permission does not exist
-                pass
+        # Determine the user's role and fetch corresponding permissions
+        if instance.is_guest():
+            permissions_to_add = role_permissions['guest']
+        elif instance.is_registered():
+            permissions_to_add = role_permissions['registered']
+        elif instance.is_admin():
+            permissions_to_add = role_permissions['admin']
+        else:
+            permissions_to_add = []  # Default to no permissions if role is undefined
+
+        # Assign permissions to the user
+        permissions = Permission.objects.filter(codename__in=permissions_to_add)
+        if permissions.exists():
+            instance.user_permissions.add(*permissions)
+
+        # Optional: Log or handle the case where permissions could not be found
+        missing_permissions = set(permissions_to_add) - set(permissions.values_list('codename', flat=True))
+        if missing_permissions:
+            # For debugging or logging purposes
+            print(f"Warning: Missing permissions: {', '.join(missing_permissions)}")

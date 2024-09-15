@@ -1,10 +1,14 @@
+
+import requests
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.timezone import now
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
+from django.conf import settings
+from django.utils import timezone
 
-
+# Define the User model
 class User(AbstractUser):
     ROLE_CHOICES = [
         ('guest', 'Guest User'),
@@ -30,6 +34,7 @@ class User(AbstractUser):
         return self.role == 'admin'
 
 
+# Define the Merchant model
 class Merchant(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     bus_company_name = models.CharField(max_length=255)
@@ -44,7 +49,16 @@ class Merchant(models.Model):
             models.UniqueConstraint(fields=['is_default'], name='unique_default_merchant', condition=models.Q(is_default=True)),
         ]
 
+class Route(models.Model):
+    name = models.CharField(max_length=100)
+    start_location = models.CharField(max_length=100)
+    end_location = models.CharField(max_length=100)
 
+    def __str__(self):
+        return self.name
+
+
+# Define the Bus model
 class Bus(models.Model):
     name = models.CharField(max_length=100)
     departure_time = models.DateTimeField()
@@ -53,14 +67,13 @@ class Bus(models.Model):
     license_plate = models.CharField(max_length=10, unique=True)
     total_seats = models.IntegerField()
     bus_routes = models.TextField(blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2)  
 
     def __str__(self):
         return self.name
 
     @property
     def available_seats(self):
-        # Calculate available seats by subtracting the sum of booked seats from total seats
         booked_seats = self.bookings.aggregate(total_booked=Sum('seats'))['total_booked'] or 0
         return self.total_seats - booked_seats
 
@@ -74,15 +87,18 @@ class Bus(models.Model):
             raise ValidationError("Departure time must be before arrival time.")
 
     def save(self, *args, **kwargs):
-        # Perform merchant approval check before saving
-        if self.pk is not None:  # Instance already exists
+        if self.pk is not None:
             if not self.merchant.approved:
                 raise ValidationError("The merchant must be approved before adding buses.")
-        else:  # New instance
+        else:
             if self.merchant and not self.merchant.approved:
                 raise ValidationError("The merchant must be approved before adding buses.")
         
         super().save(*args, **kwargs)
+
+    @property
+    def is_full(self):
+        return self.available_seats <= 0
 
     class Meta:
         permissions = [
@@ -93,8 +109,10 @@ class Bus(models.Model):
         verbose_name_plural = "Buses"
 
 
-
+# Define the Booking model
 class Booking(models.Model):
+    #user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=1)  # Provide a default value
     bus = models.ForeignKey(Bus, related_name='bookings', on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     email = models.EmailField()
@@ -106,6 +124,7 @@ class Booking(models.Model):
     pickup_time = models.DateTimeField(blank=True, null=True)
     expected_journey_duration = models.DurationField(null=True, blank=True)
     destination = models.CharField(max_length=255, blank=True)
+    is_paid = models.BooleanField(default=False)
 
     def clean(self):
         if self.pickup_time and self.pickup_time < now():
@@ -117,8 +136,78 @@ class Booking(models.Model):
         return f"Booking by {self.name} for {self.bus.name}"
 
 
+# Define the Customer model
 class Customer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.user.username
+
+
+# Define the Payment model with direct requests integration
+class Payment(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE)  # Link payment to a booking
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_id = models.CharField(max_length=255, unique=True)  # Unique identifier for the payment
+    #transaction_id = models.CharField(max_length=255, unique=True, blank=True, editable=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    refunded = models.BooleanField(default=False)
+    currency = models.CharField(max_length=10, default='USD')  # Currency type
+    is_paid = models.BooleanField(default=False)  # Indicates if payment is completed
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed')])
+    payment_method = models.CharField(max_length=20, default='EasyPay')
+
+    def __str__(self):
+        return f"Payment {self.transaction_id} - {self.status}"
+
+    def process_payment(self):
+        url = 'https://api.easypay.ug/endpoint'  # Replace with the actual EasyPay API URL
+        headers = {
+            'Authorization': f'Bearer {settings.EASYPAY_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'phone_number': self.booking.phone,
+            'amount': float(self.amount),
+            'transaction_id': self.transaction_id,
+            'description': f'Payment for booking {self.booking.id}'
+        }
+
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            self.status = 'completed'
+            self.is_paid = True
+            self.save()
+        else:
+            self.status = 'failed'
+            self.save()
+            raise ValidationError(f"Payment failed: {response.text}")
+
+    def refund(self):
+        if not self.refunded:
+            url = f'https://api.easypay.ug/endpoint/refund/{self.transaction_id}'  # Replace with EasyPay refund endpoint
+            headers = {
+                'Authorization': f'Bearer {settings.EASYPAY_API_KEY}',
+                'Content-Type': 'application/json'
+            }
+            response = requests.post(url, headers=headers)
+            if response.status_code == 200:
+                self.refunded = True
+                self.save()
+                return True
+            else:
+                raise ValidationError(f"Refund failed: {response.text}")
+        return False
+
+    class Meta:
+        ordering = ['-created_at']
