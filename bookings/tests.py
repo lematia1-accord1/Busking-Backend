@@ -4,6 +4,9 @@ from bookings.models import Merchant, Booking, Payment, Bus
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from unittest.mock import patch
+from django.test import TestCase, Client
+from django.conf import settings
+from django.urls import reverse
 
 User = get_user_model()
 
@@ -97,3 +100,19 @@ class BookingAndPaymentTests(APITestCase):
         response = self.client.post('/bookings/', booking_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('Cannot book', str(response.data))  # Custom error message validation
+
+class CsrfTestCase(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=True)
+    
+    def test_valid_csrf_token(self):
+        response = self.client.post(reverse('your-api-endpoint'), data={}, HTTP_X_CSRFTOKEN='valid-csrf-token')
+        self.assertEqual(response.status_code, 200)  # Adjust status code based on expected response
+
+    def test_invalid_csrf_token(self):
+        response = self.client.post(reverse('your-api-endpoint'), data={}, HTTP_X_CSRFTOKEN='invalid-csrf-token')
+        self.assertEqual(response.status_code, 403)  # CSRF verification should fail
+
+
+
+

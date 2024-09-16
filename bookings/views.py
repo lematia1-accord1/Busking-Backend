@@ -17,6 +17,11 @@ from django.contrib.auth.forms import UserChangeForm
 from django.contrib.auth.forms import UserCreationForm
 from rest_framework.views import APIView
 from .easypay_mobile_money import EasyPayMobileMoney
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from rest_framework.views import APIView
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.permissions import IsAuthenticated
 
 from .models import Bus, Merchant, Booking, Customer, Payment
 from .serializers import UserSerializer, BusSerializer, BookingSerializer, MerchantSerializer, CustomerSerializer
@@ -442,3 +447,12 @@ class CustomTokenRefreshView(generics.GenericAPIView):
         except requests.exceptions.RequestException as e:
             logger.error(f"Error refreshing token: {str(e)}")
             return Response({'error': 'Token refresh failed. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@csrf_exempt
+class YourApiView(APIView):
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Your logic here
+        return JsonResponse({"message": "Success"})

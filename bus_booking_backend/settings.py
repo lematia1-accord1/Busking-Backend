@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+import logging
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -152,5 +153,18 @@ REST_FRAMEWORK = {
 }
 
 # Add this to manage token expiration and other JWT settings
+# Add trusted origins if needed
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']  # Adjust based on your frontend URL
+
+# Development setting (only for testing, not recommended for production)
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+
+# Set up logging for CSRF issues
+logger = logging.getLogger('django.security.csrf')
+logger.setLevel(logging.DEBUG)
+
+
+
 
 
