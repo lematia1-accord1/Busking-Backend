@@ -28,7 +28,7 @@ class APIService:
 
         try:
             response = requests.post(url, headers=self.headers, json=data)
-            response.raise_for_status()  # Raise an exception for 4xx/5xx responses
+            response.raise_for_status()  
             return response.json()
 
         except RequestException as e:

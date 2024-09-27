@@ -1,6 +1,7 @@
 import logging
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, status
@@ -19,19 +20,58 @@ from rest_framework.views import APIView
 from .easypay_mobile_money import EasyPayMobileMoney
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from rest_framework.views import APIView
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import IsAuthenticated
+from .models import Destination, Route
+from rest_framework.generics import ListAPIView, RetrieveAPIView, CreateAPIView  
+from django.views.generic.edit import CreateView
+from django.urls import reverse_lazy
+from django.middleware.csrf import get_token
+from django.contrib.auth import authenticate, login, logout
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .serializers import UserSerializer
+from django.contrib.auth.forms import PasswordChangeForm
+from django.http import JsonResponse
+from django.views import View
+import json
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from django.views.decorators.csrf import csrf_protect
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
+import re
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework.exceptions import PermissionDenied, NotFound
+
+
+
 
 from .models import Bus, Merchant, Booking, Customer, Payment
-from .serializers import UserSerializer, BusSerializer, BookingSerializer, MerchantSerializer, CustomerSerializer
-from .forms import BookingForm, BusSearchForm, BusForm
+from .serializers import UserSerializer, BusSerializer, BookingSerializer,CustomTokenObtainPairSerializer, DestinationSerializer, MerchantSerializer, CustomerSerializer, DestinationSerializer, RouteSerializer
+from .forms import BookingForm
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 # User model
 User = get_user_model()
+
+def clean_request_data(data):
+    # Implement your data cleaning logic here
+    cleaned_data = {}
+    for key, value in data.items():
+        if isinstance(value, str):
+            cleaned_data[key] = value.strip() 
+        else:
+            cleaned_data[key] = value
+    return cleaned_data
+
+class CSRFTokenView(APIView):
+    def get(self, request, *args, **kwargs):
+        csrf_token = get_token(request)
+        return JsonResponse({'csrfToken': csrf_token})
 
 # User Views
 class UserListCreateView(generics.ListCreateAPIView):
@@ -60,17 +100,87 @@ class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         return get_object_or_404(User, pk=self.kwargs['pk'])
 
 
+class UserDetailView(generics.RetrieveAPIView): 
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]  
+
+    def get(self, request, *args, **kwargs):
+        user = self.get_object() 
+        
+        # Allow access to the logged-in user's details or an admin
+        if user.id != request.user.id and not request.user.is_staff:
+            raise PermissionDenied("You do not have permission to access this user.")
+
+        # Return user details
+        return Response({
+            'username': user.username,
+            'email': user.email,
+            'other_details': user.other_field  
+        })
+
+    
+# User Registration API
+@method_decorator(csrf_protect, name='dispatch')
+class RegisterView(View):
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            username = data.get('username')
+            password = data.get('password')
+
+            if not username or not password:
+                return JsonResponse({'error': 'Username and password are required'}, status=400)
+
+            if User.objects.filter(username=username).exists():
+                return JsonResponse({'error': 'Username already exists'}, status=400)
+
+            user = User.objects.create_user(username=username, password=password)
+            return JsonResponse({'message': 'User registered successfully'}, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        
+# Logout API
+class UserLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logout(request)
+        return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
+
+
+# Password Change API
+@method_decorator(csrf_protect, name='dispatch')
+class ChangePasswordView(View):
+    def post(self, request):
+        form = PasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'message': 'Password changed successfully'}, status=200)
+        else:
+            return JsonResponse({'error': form.errors}, status=400)
+
+
 @login_required
 def edit_profile(request):
     if request.method == 'POST':
         form = UserChangeForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect('profile')
-    else:
-        form = UserChangeForm(instance=request.user)
-    return render(request, 'edit_profile.html', {'form': form})
+            return JsonResponse({'message': 'Profile updated successfully'}, status=200)
+        else:
+            return JsonResponse({'error': form.errors}, status=400)
 
+    # If the request method is GET, return the user's current data
+    current_data = {
+        'username': request.user.username,
+        'email': request.user.email,
+        # Add any other fields you want to include
+    }
+    return JsonResponse(current_data, status=200)
+
+@csrf_protect
 def bus_details(request, bus_id):
     """View to retrieve details for a specific bus."""
     bus = get_object_or_404(Bus, id=bus_id)
@@ -87,13 +197,10 @@ def bus_details(request, bus_id):
     return JsonResponse(data)
 
 
-# Bus Views
-class BusListCreateView(generics.ListCreateAPIView):
+# For authenticated users to create buses
+class BusCreateView(generics.CreateAPIView):
     serializer_class = BusSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Bus.objects.filter(merchant__user=self.request.user, merchant__approved=True)
 
     def perform_create(self, serializer):
         merchant = get_object_or_404(Merchant, user=self.request.user)
@@ -102,7 +209,28 @@ class BusListCreateView(generics.ListCreateAPIView):
         else:
             raise ValidationError("Merchant must be approved to add buses.")
 
+# For all users to list buses
+class BusListView(generics.ListCreateAPIView):
+    serializer_class = BusSerializer
+    permission_classes = [permissions.AllowAny]  
 
+    def get_queryset(self):
+        # List only buses from approved merchants
+        return Bus.objects.filter(merchant__approved=True)
+
+    def perform_create(self, serializer):
+        # Ensure the merchant is approved before allowing bus creation
+        merchant_id = self.request.data.get('merchant') 
+        try:
+            merchant = Merchant.objects.get(id=merchant_id)
+            if not merchant.approved:
+                return Response({'detail': 'Merchant is not approved.'}, status=status.HTTP_403_FORBIDDEN)
+        except Merchant.DoesNotExist:
+            return Response({'detail': 'Merchant does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Save the bus if the merchant is approved
+        serializer.save()
+    
 class SearchBusesView(generics.ListAPIView):
     serializer_class = BusSerializer
 
@@ -118,18 +246,63 @@ class BusRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Allow access only to buses associated with the user's approved merchants
         return Bus.objects.filter(merchant__user=self.request.user, merchant__approved=True)
+
+    def get(self, request, *args, **kwargs):
+        bus = self.get_object() 
+        logger.debug(f"Requesting bus ID: {bus.id} for user ID: {request.user.id}")
+
+        # Check if the bus is associated with the user's approved merchant
+        if bus.merchant.user != request.user:
+            logger.debug(f"Bus merchant ID: {bus.merchant.user.id} does not match user ID: {request.user.id}")
+            raise NotFound("You do not have permission to access this bus.")
+
+        # Return the bus details
+        serializer = self.get_serializer(bus)
+        return Response(serializer.data)
+
+
+    def perform_update(self, serializer):
+        # Ensure that the user is the merchant associated with the bus
+        bus = self.get_object()
+        if bus.merchant.user != self.request.user:
+            raise NotFound("You do not have permission to update this bus.")
+
+        # Update the bus
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Ensure that the user is the merchant associated with the bus
+        if instance.merchant.user != self.request.user:
+            raise NotFound("You do not have permission to delete this bus.")
+
+        # Delete the bus
+        instance.delete()
+
 
 
 def view_available_buses(request):
+    """View to retrieve a list of available buses."""
     buses = Bus.objects.filter(merchant__approved=True)
-    return render(request, 'bus_list.html', {'buses': buses})
+    data = [{
+        'id': bus.id,
+        'name': bus.name,
+        'departure_time': bus.departure_time,
+        'arrival_time': bus.arrival_time,
+        'price': bus.price,
+        'total_seats': bus.total_seats,
+        'available_seats': bus.available_seats,
+        'bus_routes': bus.bus_routes,  
+    } for bus in buses]
+    return JsonResponse(data, safe=False)
 
 
 # Booking Views
 class BookingListCreateView(generics.ListCreateAPIView):
     serializer_class = BookingSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    #permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         return Booking.objects.all()
@@ -140,35 +313,50 @@ class BookingRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
 
 @login_required
+@require_POST
 def book_ticket(request, bus_id=None):
+    """View to book a ticket for a specific bus."""
     bus = get_object_or_404(Bus, id=bus_id) if bus_id else None
-    if request.method == 'POST':
+    
+    data = {}
+    if bus:
         form = BookingForm(request.POST)
         if form.is_valid():
             booking = form.save(commit=False)
             booking.user = request.user
             booking.save()
-            if bus:
-                seats = int(request.POST['seats'])
-                if seats <= bus.available_seats:
-                    booking = Booking(user=request.user, bus=bus, seats_booked=seats)
-                    booking.save()
-                    bus.available_seats -= seats
-                    bus.save()
-                    return redirect('payment_process', booking_id=booking.id)
-                else:
-                    messages.error(request, "Not enough seats available.")
-                    return redirect('book_ticket', bus_id=bus_id)
-            return redirect('booking_history')
-    else:
-        form = BookingForm()
-    return render(request, 'book_ticket.html', {'form': form, 'bus': bus})
+            seats = int(request.POST['seats'])
+            if seats <= bus.available_seats:
+                booking = Booking(user=request.user, bus=bus, seats_booked=seats)
+                booking.save()
+                bus.available_seats -= seats
+                bus.save()
+                data['message'] = 'Booking successful.'
+                data['booking_id'] = booking.id
+                return JsonResponse(data, status=201)
+            else:
+                data['error'] = 'Not enough seats available.'
+                return JsonResponse(data, status=400)
 
+    data['error'] = 'Invalid request.'
+    return JsonResponse(data, status=400)
 
 @login_required
 def payment_process(request, booking_id):
+    """View to process payment for a specific booking."""
     booking = get_object_or_404(Booking, id=booking_id)
-    return render(request, 'payment.html', {'booking': booking})
+
+    # Create a response with booking details for payment processing
+    data = {
+        'booking_id': booking.id,
+        'bus_name': booking.bus.name,
+        'departure_time': booking.bus.departure_time,
+        'arrival_time': booking.bus.arrival_time,
+        'price': booking.bus.price,
+        'seats_booked': booking.seats_booked,
+        'user_email': booking.user.email,
+    }
+    return JsonResponse(data, status=200)
 
 
 @login_required
@@ -186,43 +374,69 @@ def confirm_booking(request, booking_id):
 
 @login_required
 def booking_history(request):
-    bookings = Booking.objects.filter(user=request.user)
-    return render(request, 'booking_history.html', {'bookings': bookings})
+    """View to retrieve the booking history for the logged-in user."""
+    bookings = Booking.objects.filter(user=request.user).select_related('bus')
 
+    # Prepare the booking data for JSON response
+    booking_data = [
+        {
+            'booking_id': booking.id,
+            'bus_name': booking.bus.name,
+            'departure_time': booking.bus.departure_time,
+            'arrival_time': booking.bus.arrival_time,
+            'price': booking.bus.price,
+            'seats_booked': booking.seats_booked,
+            'booking_date': booking.created_at,  
+        }
+        for booking in bookings
+    ]
+
+    return JsonResponse({'bookings': booking_data}, status=200)
 
 @login_required
 def cancel_booking(request, booking_id):
-    booking = get_object_or_404(Booking, id=booking_id, user=request.user)
-    bus = booking.bus
-    bus.available_seats += booking.seats_booked
-    bus.save()
-    booking.delete()
-    return redirect('booking_history')
+    # Ensure this view only responds to DELETE requests
+    if request.method == 'DELETE':
+        booking = get_object_or_404(Booking, id=booking_id, user=request.user)
+        bus = booking.bus
+        bus.available_seats += booking.seats_booked
+        bus.save()
+        booking.delete()
+        return JsonResponse({'message': 'Booking canceled successfully'}, status=204)  
 
+    return JsonResponse({'error': 'Method not allowed'}, status=405) 
 
 # Admin Views
 @staff_member_required
 def manage_buses(request):
-    buses = Bus.objects.all()
-    return render(request, 'manage_buses.html', {'buses': buses})
-
+    """View to retrieve all buses for management."""
+    buses = Bus.objects.all().values('id', 'name', 'departure_time', 'arrival_time', 'price', 'total_seats', 'available_seats')
+    
+    return JsonResponse({'buses': list(buses)}, status=200)
 
 @staff_member_required
 def booking_stats(request):
+    """View to retrieve booking statistics grouped by bus."""
     from django.db.models import Count
-    stats = Booking.objects.values('bus').annotate(total=Count('id'))
-    return render(request, 'booking_stats.html', {'stats': stats})
+    
+    stats = Booking.objects.values('bus__name').annotate(total=Count('id'))
+    
+    return JsonResponse({'stats': list(stats)}, status=200)
 
 
 def register(request):
+    """User registration view."""
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('login')
+            return JsonResponse({'message': 'User registered successfully'}, status=201)
+        else:
+            return JsonResponse({'errors': form.errors}, status=400)
     else:
         form = UserCreationForm()
-    return render(request, 'register.html', {'form': form})
+        return JsonResponse({'form': form.as_p()}, status=200)  
+
 
 def browse_buses(request):
     """View to list all buses."""
@@ -240,14 +454,6 @@ def browse_buses(request):
 
 
 # Merchant Views
-class MerchantListView(generics.ListAPIView):
-    serializer_class = MerchantSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Merchant.objects.all()
-
-
 class ApproveMerchantView(generics.UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -263,10 +469,63 @@ class ApproveMerchantView(generics.UpdateAPIView):
             return Response({"detail": "Only the default merchant can approve other merchants."}, status=status.HTTP_403_FORBIDDEN)
 
 
-class MerchantDetailView(generics.RetrieveAPIView):
-    queryset = Merchant.objects.all()
-    serializer_class = MerchantSerializer
-    lookup_field = 'pk'
+class MerchantDetailView(APIView):
+    permission_classes = [IsAuthenticated]  
+
+    def get(self, request, pk):
+        # Log the user and merchant request
+        logger.info(f"User: {request.user} requested merchant {pk}")
+        
+        # Clean the pk (if needed, e.g., removing unwanted characters)
+        cleaned_pk = re.sub(r'\s+', '', str(pk))  
+
+        # Retrieve the merchant details using the cleaned pk
+        merchant = get_object_or_404(Merchant, pk=cleaned_pk)
+
+        # Return the merchant details
+        return Response({
+            'id': merchant.id,
+            'name': merchant.name,
+            'email': merchant.email,
+            'bus_company_name': merchant.bus_company_name,
+            'phone_number': merchant.phone_number,
+            'address': merchant.address,
+            'approved': merchant.approved,
+        })
+
+    
+class MerchantListView(APIView):
+    permission_classes = [AllowAny]  
+
+    def get(self, request):
+        merchants = Merchant.objects.all()
+        serializer = MerchantSerializer(merchants, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        serializer = MerchantSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class MerchantCreateView(APIView):
+    def post(self, request):
+        # Lookup user by username
+        username = request.data.get('user')
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Update the request data to include the user ID
+        request.data['user'] = user.id
+        
+        serializer = MerchantSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Customer Views
@@ -320,20 +579,20 @@ class BookBusView(View):
         )
 
         # Initiate EasyPay transaction via requests
-        url = 'https://api.easypay.ug/endpoint'  # Replace with the correct EasyPay API URL
+        url = 'https://api.easypay.ug/endpoint'  
         headers = {
-            'Authorization': f'Bearer {settings.EASYPAY_ACCESS_TOKEN}',  # Use settings for tokens
+            'Authorization': f'Bearer {settings.EASYPAY_ACCESS_TOKEN}',  
             'Content-Type': 'application/json'
         }
         data = {
-            'amount': booking.calculate_total_price(),  # Replace with actual method to calculate price
-            'currency': 'UGX',  # Or your relevant currency
+            'amount': booking.calculate_total_price(),  
+            'currency': 'UGX',  
             'reference': booking.id
         }
 
         try:
             response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()  # Raise an HTTPError for bad responses
+            response.raise_for_status()  
             payment_data = response.json()
             logger.info(f"Payment initiated successfully. Response: {payment_data}")
         except requests.exceptions.RequestException as e:
@@ -341,16 +600,17 @@ class BookBusView(View):
             return JsonResponse({'error': 'Payment initiation failed. Please try again.'}, status=500)
 
         return redirect('booking_success', booking_id=booking.id)
-
+    
+@method_decorator(csrf_exempt, name='dispatch')
 class EasyPayCallbackView(View):
     def post(self, request, *args, **kwargs):
         transaction_id = request.POST.get('transaction_id')
         status = request.POST.get('status')
 
         # Check transaction status
-        url = 'https://api.easypay.ug/check_status'  # Replace with the correct EasyPay API URL
+        url = 'https://api.easypay.ug/check_status'  
         headers = {
-            'Authorization': 'Bearer YOUR_ACCESS_TOKEN',  # Replace with the actual token
+            'Authorization': 'Bearer YOUR_ACCESS_TOKEN',  
             'Content-Type': 'application/json'
         }
         data = {
@@ -401,7 +661,7 @@ class InitiatePaymentView(APIView):
             if payment_response.get('status') == 'success':
                 # Create a Payment record
                 Payment.objects.create(
-                    user=request.user,  # Assuming the user is authenticated
+                    user=request.user,  
                     booking=booking,
                     amount=amount,
                     transaction_id=payment_response.get('transaction_id'),
@@ -421,14 +681,78 @@ class InitiatePaymentView(APIView):
             return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# Token views
+class UserAuthView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Clean the request data to remove unwanted characters
+        cleaned_data = self.clean_request_data(request.data)
+
+        username = cleaned_data.get('username')
+        password = cleaned_data.get('password')
+
+        # Authenticate the user
+        user = authenticate(username=username, password=password)
+
+        if user is not None:
+            # Generate tokens for the authenticated user
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': {
+                    'username': user.username,
+                    'email': user.email
+                }
+            }, status=200)
+
+        return Response({'detail': 'Invalid credentials'}, status=400)
+
+    def clean_request_data(self, data):
+        # Sanitize input data to remove any newline or whitespace characters
+        cleaned_data = {}
+        for key, value in data.items():
+            if isinstance(value, str):
+                cleaned_data[key] = re.sub(r'\s+', '', value)  
+            else:
+                cleaned_data[key] = value
+        return cleaned_data
+
+
+class UserLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # Logout logic (blacklist the token if you are using simplejwt)
+            token = request.data.get('token') 
+            if token:
+                # You might need to implement token blacklisting logic here
+                BlacklistedToken.objects.create(token=token) 
+            return Response({"detail": "Successfully logged out."}, status=205)  
+        except Exception as e:
+            return Response({"detail": str(e)}, status=400)
+
+        
 class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        logger.debug(f"User {user.username} successfully logged in.")
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        try:
+            serializer.is_valid(raise_exception=True)
+            
+            # Access the user object directly from the serializer
+            user = serializer.user
+            
+            # Logging user login
+            logger.debug(f"User {user.username} successfully logged in.")
+            
+            # Return the validated data (tokens + additional user info)
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error during token obtain: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CustomTokenRefreshView(generics.GenericAPIView):
@@ -448,11 +772,42 @@ class CustomTokenRefreshView(generics.GenericAPIView):
             logger.error(f"Error refreshing token: {str(e)}")
             return Response({'error': 'Token refresh failed. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@csrf_exempt
-class YourApiView(APIView):
-    authentication_classes = [BasicAuthentication]
-    permission_classes = [IsAuthenticated]
-
+class YourApiView(View):
+    @method_decorator(csrf_protect)  
     def post(self, request):
         # Your logic here
         return JsonResponse({"message": "Success"})
+
+    
+class CreateDestinationView(generics.CreateAPIView):
+    queryset = Destination.objects.all()
+    serializer_class = DestinationSerializer
+
+class DestinationDetailView(generics.RetrieveAPIView):
+    queryset = Destination.objects.all()
+    serializer_class = DestinationSerializer
+
+class DestinationListView(generics.ListAPIView):
+    queryset = Destination.objects.all()
+    serializer_class = DestinationSerializer
+
+class RouteListView(ListAPIView):
+    queryset = Route.objects.all()
+    serializer_class = RouteSerializer
+
+class RouteDetailView(RetrieveAPIView):
+    queryset = Route.objects.all()
+    serializer_class = RouteSerializer
+
+class RouteCreateView(APIView):
+    permission_classes = [IsAuthenticated]  
+
+    def post(self, request):
+        serializer = RouteSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()  
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+

@@ -1,19 +1,29 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Bus, Booking, Merchant, Customer, Payment
+from .models import Destination, Route
+from django.conf import settings
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+#User = settings.AUTH_USER_MODEL
 User = get_user_model()
-
 class UserSerializer(serializers.ModelSerializer):
     """
     Serializer for User model with controlled field access.
     """
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_type']
+        fields = ['id', 'username', 'password', 'email', 'first_name', 'last_name', 'user_type']
         extra_kwargs = {
-            'user_type': {'write_only': True},  # Prevents user_type from being exposed via API
+            'user_type': {'write_only': True},  
         }
+
+    def create(self, validated_data):
+        user = User(**validated_data)
+        user.set_password(validated_data['password'])  
+        user.save()
+        return user
+
 
 class BusSerializer(serializers.ModelSerializer):
     """
@@ -28,7 +38,7 @@ class BusSerializer(serializers.ModelSerializer):
             'bus_routes', 'license_plate', 'total_seats', 'available_seats'
         ]
         extra_kwargs = {
-            'bus_routes': {'required': False},  # Allows bus_routes to be optional
+            'bus_routes': {'required': False},  
         }
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -42,19 +52,19 @@ class PaymentSerializer(serializers.ModelSerializer):
             'timestamp', 'refunded', 'currency', 'is_paid', 'status', 'payment_method'
         ]
         extra_kwargs = {
-            'transaction_id': {'read_only': True},  # Transaction ID should be immutable
-            'currency': {'read_only': True},  # Currency should not be modifiable via API
-            'is_paid': {'read_only': True},  # Internal field for payment status
-            'status': {'read_only': True},  # Managed internally
-            'payment_method': {'read_only': True},  # Set during the transaction
+            'transaction_id': {'read_only': True},  
+            'currency': {'read_only': True},  
+            'is_paid': {'read_only': True},  
+            'status': {'read_only': True},  
+            'payment_method': {'read_only': True}, 
         }
 
 class BookingSerializer(serializers.ModelSerializer):
     """
     Serializer for Booking model. Includes nested BusSerializer and a custom payment field.
     """
-    bus = BusSerializer()  # Nested serializer for bus details
-    payment = serializers.SerializerMethodField()  # Custom method to retrieve payment info
+    bus = BusSerializer() 
+    payment = serializers.SerializerMethodField()  
 
     class Meta:
         model = Booking
@@ -64,8 +74,8 @@ class BookingSerializer(serializers.ModelSerializer):
             'expected_journey_duration', 'destination', 'is_paid', 'payment'
         ]
         extra_kwargs = {
-            'pickup_time': {'required': False},  # Optional field
-            'expected_journey_duration': {'required': False},  # Optional field
+            'pickup_time': {'required': False},  
+            'expected_journey_duration': {'required': False},  
         }
 
     def get_payment(self, obj):
@@ -82,24 +92,67 @@ class MerchantSerializer(serializers.ModelSerializer):
     """
     Serializer for Merchant model with nested UserSerializer.
     """
-    user = UserSerializer()  # Nested serializer for user details
+    user = UserSerializer() 
 
     class Meta:
         model = Merchant
         fields = ['id', 'user', 'bus_company_name', 'approved', 'is_default']
         extra_kwargs = {
-            'user': {'read_only': True},  # User details should not be modifiable via API
+            'user': {'read_only': True},  
         }
+
+    def create(self, validated_data):
+        user_data = validated_data.pop('user')  
+        user = User.objects.create(**user_data)  
+        merchant = Merchant.objects.create(user=user, **validated_data)  
+        return merchant
+
 
 class CustomerSerializer(serializers.ModelSerializer):
     """
     Serializer for Customer model with nested UserSerializer.
     """
-    user = UserSerializer()  # Nested serializer for user details
+    user = UserSerializer() 
 
     class Meta:
         model = Customer
         fields = ['id', 'user']
         extra_kwargs = {
-            'user': {'read_only': True},  # User details should not be modifiable via API
+            'user': {'read_only': True},  
         }
+
+
+class DestinationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Destination
+        fields = ['id', 'name', 'city', 'state']
+
+class RouteSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Route
+        fields = ['id', 'name', 'start_location', 'end_location']
+
+    
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Add custom claims if necessary (optional)
+        token['username'] = user.username
+        token['email'] = user.email  
+
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        # Include additional user information in the response
+        data['user'] = self.user.username
+        data['email'] = self.user.email  
+
+        return data
+
+
+

@@ -16,7 +16,7 @@ def assign_user_role(sender, instance, created, **kwargs):
                 'can_view_bus', 'can_book_ticket', 'can_view_booking_history',
                 'can_cancel_booking', 'can_manage_profile'
             ],
-            'admin': [perm.codename for perm in Permission.objects.all()]  # Admin gets all permissions
+            'admin': [perm.codename for perm in Permission.objects.all()] 
         }
 
         # Determine the user's role and fetch corresponding permissions
@@ -27,7 +27,7 @@ def assign_user_role(sender, instance, created, **kwargs):
         elif instance.is_admin():
             permissions_to_add = role_permissions['admin']
         else:
-            permissions_to_add = []  # Default to no permissions if role is undefined
+            permissions_to_add = []  
 
         # Assign permissions to the user
         permissions = Permission.objects.filter(codename__in=permissions_to_add)

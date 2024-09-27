@@ -38,6 +38,10 @@ class User(AbstractUser):
 class Merchant(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     bus_company_name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, blank=True, null=True) 
+    email = models.EmailField(max_length=255, blank=True, null=True)  
+    phone_number = models.CharField(max_length=20, blank=True, null=True) 
+    address = models.CharField(max_length=255, blank=True, null=True)  
     approved = models.BooleanField(default=False)
     is_default = models.BooleanField(default=False)
 
@@ -48,15 +52,6 @@ class Merchant(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['is_default'], name='unique_default_merchant', condition=models.Q(is_default=True)),
         ]
-
-class Route(models.Model):
-    name = models.CharField(max_length=100)
-    start_location = models.CharField(max_length=100)
-    end_location = models.CharField(max_length=100)
-
-    def __str__(self):
-        return self.name
-
 
 # Define the Bus model
 class Bus(models.Model):
@@ -211,3 +206,21 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class Destination(models.Model):
+    name = models.CharField(max_length=255)
+    city = models.CharField(max_length=255)
+    state = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.name}, {self.city}, {self.state}"
+
+class Route(models.Model):
+    name = models.CharField(max_length=100)
+    start_location = models.CharField(max_length=100)
+    end_location = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"Route from {self.start_location} to {self.end_location}"
+

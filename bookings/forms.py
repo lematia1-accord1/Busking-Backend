@@ -3,6 +3,16 @@ from django.core.exceptions import ValidationError
 from django.utils.timezone import now
 from .models import Bus, Booking, Payment
 from .easypay_mobile_money import EasyPayMobileMoney
+from django.conf import settings
+from django.contrib.auth import get_user_model
+
+#User = settings.AUTH_USER_MODEL
+User = get_user_model()
+
+class UserForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password']
 
 # Initialize EasyPayMobileMoney instance
 easypay = EasyPayMobileMoney()
@@ -20,7 +30,7 @@ class BookingForm(forms.ModelForm):
         ]
 
     def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop('user', None)  # Capture the user if passed
+        self.user = kwargs.pop('user', None)  
         super().__init__(*args, **kwargs)
 
     def clean(self):
@@ -54,12 +64,12 @@ class BookingForm(forms.ModelForm):
         """
         Initiates payment through EasyPay for the booking.
         """
-        amount = booking.bus.price * booking.seats  # Calculate total price
+        amount = booking.bus.price * booking.seats  
 
         try:
             # Create a payment via EasyPay
             payment_response = easypay.initiate_transaction(
-                phone_number=self.user.profile.phone_number,  # Adjust if phone number is located elsewhere
+                phone_number=self.user.profile.phone_number,  
                 amount=amount,
                 transaction_id=f"BOOKING-{booking.id}",
                 description=f"Payment for booking {booking.id}"
@@ -71,7 +81,7 @@ class BookingForm(forms.ModelForm):
                     user=self.user,
                     booking=booking,
                     amount=amount,
-                    transaction_id=payment_response.get('transaction_id'),  # Use transaction ID from EasyPay
+                    transaction_id=payment_response.get('transaction_id'), 
                 )
             else:
                 raise ValidationError(f"Payment failed: {payment_response.get('message')}")
@@ -97,8 +107,6 @@ class PaymentForm(forms.ModelForm):
             raise ValidationError("Transaction ID is required.")
         
     
-
-
 class BusSearchForm(forms.Form):
     """
     Form to search for buses based on source, destination, and date.

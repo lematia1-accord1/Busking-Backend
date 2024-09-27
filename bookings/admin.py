@@ -3,8 +3,9 @@ from django.db.models import Sum
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.contrib.admin import SimpleListFilter
-from .models import Bus, Booking, User, Merchant, Customer, Payment, Route
+from .models import Bus, Booking, Merchant, Customer, Payment, Route
 from .forms import BookingForm
+from django.middleware.csrf import get_token
 from django.conf import settings
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import login
@@ -12,11 +13,16 @@ from django.shortcuts import redirect, render
 from django.http import HttpResponse
 import csv
 import requests
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin
+from django.contrib import admin
+from .models import User
+
 
 # Admin for Merchant
 class MerchantAdmin(admin.ModelAdmin):
     list_display = ('user', 'bus_company_name', 'user_email', 'user_is_active', 'approved', 'is_default')
-    fields = ('user', 'bus_company_name', 'approved', 'is_default')  # Add fields to the form
+    fields = ('user', 'bus_company_name', 'approved', 'is_default') 
     actions = ['approve_merchants']
 
     @admin.action(description='Approve selected merchants')
@@ -114,6 +120,9 @@ class BookingAdmin(admin.ModelAdmin):
         if obj:
             return self.readonly_fields + ('is_paid',)
         return self.readonly_fields
+
+#User = settings.AUTH_USER_MODEL
+User = get_user_model()
 
 
 # Admin for User

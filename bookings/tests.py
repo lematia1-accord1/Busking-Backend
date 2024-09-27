@@ -8,7 +8,14 @@ from django.test import TestCase, Client
 from django.conf import settings
 from django.urls import reverse
 
+
 User = get_user_model()
+
+
+class UserTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='testuser', password='12345')
+
 
 class BookingAndPaymentTests(APITestCase):
 
@@ -43,7 +50,7 @@ class BookingAndPaymentTests(APITestCase):
             'destination': 'Destination B'
         }
 
-    @patch('bookings.models.Payment.refund')  # Mock the refund method
+    @patch('bookings.models.Payment.refund')  
     def test_create_booking_and_payment(self, mock_refund):
         """Test creating a booking and processing a payment."""
         booking_data = self.create_booking(seats=2)
@@ -62,7 +69,7 @@ class BookingAndPaymentTests(APITestCase):
         payment_data = {
             'user': self.user.id,
             'booking': booking_id,
-            'amount': 200.00,  # Assuming the amount is the total cost of the booking
+            'amount': 200.00,  
             'transaction_id': 'test_transaction_id',
             'timestamp': timezone.now().isoformat(),
             'currency': 'USD',
@@ -91,7 +98,7 @@ class BookingAndPaymentTests(APITestCase):
         # Verify the booking was created
         booking = Booking.objects.get(id=booking_id)
         self.assertEqual(booking.name, 'John Doe')
-        self.assertIsNone(booking.payment)  # Verify that no payment is associated with the booking
+        self.assertIsNone(booking.payment)  
 
     def test_create_booking_with_invalid_seats(self):
         """Test creating a booking with more seats than available."""
@@ -99,7 +106,7 @@ class BookingAndPaymentTests(APITestCase):
 
         response = self.client.post('/bookings/', booking_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('Cannot book', str(response.data))  # Custom error message validation
+        self.assertIn('Cannot book', str(response.data))  
 
 class CsrfTestCase(TestCase):
     def setUp(self):
@@ -107,11 +114,11 @@ class CsrfTestCase(TestCase):
     
     def test_valid_csrf_token(self):
         response = self.client.post(reverse('your-api-endpoint'), data={}, HTTP_X_CSRFTOKEN='valid-csrf-token')
-        self.assertEqual(response.status_code, 200)  # Adjust status code based on expected response
+        self.assertEqual(response.status_code, 200)  
 
     def test_invalid_csrf_token(self):
         response = self.client.post(reverse('your-api-endpoint'), data={}, HTTP_X_CSRFTOKEN='invalid-csrf-token')
-        self.assertEqual(response.status_code, 403)  # CSRF verification should fail
+        self.assertEqual(response.status_code, 403)  
 
 
 

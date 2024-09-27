@@ -47,6 +47,9 @@ INSTALLED_APPS = [
     'bookings',
     'rest_framework',  # Add Django REST framework
     'rest_framework.authtoken',  # Add Token Authentication
+    'rest_framework_simplejwt',
+
+    
 ]
 
 
@@ -58,10 +61,15 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    #'bookings.middleware.DisableCSRF',  
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'bookings.middleware.CSRFMiddlewareDebug',
+    'bookings.middleware.CustomCSRFMiddleware',
+    'bookings.middleware.RemoveNewlinesMiddleware',
 ]
+
 
 ROOT_URLCONF = 'bus_booking_backend.urls'
 
@@ -146,15 +154,30 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 CORS_ALLOW_ALL_ORIGINS = True  # For development purposes; change to specific origins in production
 
-REST_FRAMEWORK = {
+""" REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+ """
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',  # Optional
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+                'rest_framework.authentication.TokenAuthentication',
+
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',  
     ),
 }
 
 # Add this to manage token expiration and other JWT settings
 # Add trusted origins if needed
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']  # Adjust based on your frontend URL
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000',
+                        "http://localhost:19006",]  # Adjust based on your frontend URL
 
 # Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = False
