@@ -184,7 +184,7 @@ CORS_ALLOWED_ORIGINS = ['https://web-production-fb0d.up.railway.app']
 
 
 # Development setting (only for testing, not recommended for production)
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = False  # Should be False to allow JS access
 CSRF_USE_SESSIONS = False  # Generally set to False for API endpoints
 
