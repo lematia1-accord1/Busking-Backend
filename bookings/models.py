@@ -127,8 +127,12 @@ class Booking(models.Model):
         if self.seats > self.bus.available_seats:
             raise ValidationError(f"Cannot book {self.seats} seats. Only {self.bus.available_seats} available.")
 
+    #def __str__(self):
+        #return f"Booking by {self.name} for {self.bus.name}"
+    
     def __str__(self):
-        return f"Booking by {self.name} for {self.bus.name}"
+        return f'Booking {self.id} for {self.user.username} on {self.bus.name}'
+
 
 
 # Define the Customer model

@@ -14,7 +14,6 @@ from .views import (
     CustomerDetailView,
     ApproveMerchantView,
     BookBusView,
-    SearchBusesView,
     EasyPayCallbackView,
     InitiatePaymentView,
     browse_buses,
@@ -29,8 +28,11 @@ from .views import (
     UserAuthView, 
     UserLogoutView,
     DestinationListView,
-
-)
+    view_available_buses,
+    book_ticket,
+    RegisterView,
+    
+    )
 
 urlpatterns = [
 
@@ -43,11 +45,9 @@ urlpatterns = [
     path('users/', UserListCreateView.as_view(), name='user-list-create'),
     path('users/<int:pk>/', UserRetrieveUpdateDestroyView.as_view(), name='user-detail'),
 
-    # User Registration
-    path('register/', views.register, name='register'),
-
-        # Authentication
-    path('login/', UserAuthView.as_view(), name='user-auth'), 
+    # Authentication
+    path('login/', UserAuthView.as_view(), name='user-auth'),
+    path('register/', RegisterView.as_view(), name='register'), 
     path('logout/', UserLogoutView.as_view(), name='user-logout'),
 
     # Profile / Password Change
@@ -56,15 +56,18 @@ urlpatterns = [
     # Merchant URLs
     path('merchants/', MerchantListView.as_view(), name='merchant-list'),
     path('merchants/<int:pk>/', MerchantDetailView.as_view(), name='merchant-detail'),
-    path('merchants/approve/', ApproveMerchantView.as_view(), name='approve-merchant'),
+    path('merchants/<int:merchant_id>/approve/', ApproveMerchantView.as_view(), name='approve-merchant'),
+
+    #path('merchants/approve/', ApproveMerchantView.as_view(), name='approve-merchant'),
 
     #bus URLS
     path('buses/<int:pk>/', BusRetrieveUpdateDestroyView.as_view(), name='bus-detail'), 
     path('buses/<int:bus_id>/book/<int:number_of_seats>/', BookBusView.as_view(), name='book-bus'),
-    path('search-buses/', SearchBusesView.as_view(), name='search_buses'),
     path('buses/', BusListView.as_view(), name='bus-list'), 
+    path('browse_buses/', browse_buses, name='browse_buses'),
     path('buses/create/', BusCreateView.as_view(), name='bus-create'),
-    
+    path('available_buses/', view_available_buses, name='available_buses'),
+
     # Booking URLs
     path('bookings/', BookingListCreateView.as_view(), name='booking-list-create'),
     path('bookings/<int:pk>/', BookingRetrieveUpdateDestroyView.as_view(), name='booking-detail'),
@@ -79,7 +82,7 @@ urlpatterns = [
     path('customers/<int:pk>/', CustomerDetailView.as_view(), name='customer-detail'),
 
     # Registered user routes
-    path('book-ticket/', views.book_ticket, name='book_ticket'),
+    path('bus/<int:bus_id>/book_ticket/', book_ticket, name='book_ticket'),
     path('booking-history/', views.booking_history, name='booking_history'),
 
     # Admin routes

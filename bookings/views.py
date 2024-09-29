@@ -33,7 +33,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import UserSerializer
 from django.contrib.auth.forms import PasswordChangeForm
-from django.http import JsonResponse
+from django.http import JsonResponse,HttpResponse
 from django.views import View
 import json
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
@@ -44,8 +44,7 @@ import re
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework.exceptions import PermissionDenied, NotFound
-
-
+from rest_framework.decorators import api_view
 
 
 from .models import Bus, Merchant, Booking, Customer, Payment
@@ -54,6 +53,10 @@ from .forms import BookingForm
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+def home(request):
+    return HttpResponse("Welcome to the home page!")
+
 
 # User model
 User = get_user_model()
@@ -121,6 +124,7 @@ class UserDetailView(generics.RetrieveAPIView):
 
     
 # User Registration API
+#User registration view (POST)
 @method_decorator(csrf_protect, name='dispatch')
 class RegisterView(View):
     def post(self, request):
@@ -140,15 +144,18 @@ class RegisterView(View):
 
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        
-# Logout API
-class UserLogoutView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        logout(request)
-        return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
 
+# User profile view (GET)
+@login_required
+def profile_json_view(request):
+    user_data = {
+        "username": request.user.username,
+        "email": request.user.email,
+        "first_name": request.user.first_name,
+        "last_name": request.user.last_name
+    }
+    return JsonResponse(user_data, status=200)
 
 # Password Change API
 @method_decorator(csrf_protect, name='dispatch')
@@ -179,22 +186,6 @@ def edit_profile(request):
         # Add any other fields you want to include
     }
     return JsonResponse(current_data, status=200)
-
-@csrf_protect
-def bus_details(request, bus_id):
-    """View to retrieve details for a specific bus."""
-    bus = get_object_or_404(Bus, id=bus_id)
-    data = {
-        'id': bus.id,
-        'name': bus.name,
-        'departure_time': bus.departure_time,
-        'arrival_time': bus.arrival_time,
-        'price': bus.price,
-        'total_seats': bus.total_seats,
-        'available_seats': bus.available_seats,
-        'bus_routes': bus.bus_routes,
-    }
-    return JsonResponse(data)
 
 
 # For authenticated users to create buses
@@ -280,7 +271,24 @@ class BusRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         # Delete the bus
         instance.delete()
 
+class BookBusView(APIView):
+    def post(self, request, bus_id, number_of_seats):
+        # Get the bus object or return a 404 if not found
+        bus = get_object_or_404(Bus, id=bus_id)
 
+        # Validate the number of seats
+        if number_of_seats > bus.available_seats:
+            return Response({'error': 'Not enough seats available.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create a booking instance
+        booking = Booking(user=request.user, bus=bus, seats_booked=number_of_seats)
+        booking.save()  # Save the booking to the database
+
+        # Update the available seats on the bus
+        bus.available_seats -= number_of_seats
+        bus.save()  # Save the updated bus
+
+        return Response({'message': 'Booking successful.', 'booking_id': booking.id}, status=status.HTTP_201_CREATED)
 
 def view_available_buses(request):
     """View to retrieve a list of available buses."""
@@ -312,25 +320,31 @@ class BookingRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BookingSerializer
 
 
-@login_required
+""" @login_required
 @require_POST
 def book_ticket(request, bus_id=None):
-    """View to book a ticket for a specific bus."""
+
     bus = get_object_or_404(Bus, id=bus_id) if bus_id else None
-    
+
     data = {}
     if bus:
+        # Ensure 'seats' is included in the request
+        if 'seats' not in request.POST:
+            data['error'] = 'Number of seats is required.'
+            return JsonResponse(data, status=400)
+
+        # Validate the form data
         form = BookingForm(request.POST)
         if form.is_valid():
-            booking = form.save(commit=False)
-            booking.user = request.user
-            booking.save()
             seats = int(request.POST['seats'])
             if seats <= bus.available_seats:
                 booking = Booking(user=request.user, bus=bus, seats_booked=seats)
                 booking.save()
+                
+                # Update available seats
                 bus.available_seats -= seats
                 bus.save()
+                
                 data['message'] = 'Booking successful.'
                 data['booking_id'] = booking.id
                 return JsonResponse(data, status=201)
@@ -339,7 +353,39 @@ def book_ticket(request, bus_id=None):
                 return JsonResponse(data, status=400)
 
     data['error'] = 'Invalid request.'
-    return JsonResponse(data, status=400)
+    return JsonResponse(data, status=400) """
+
+@login_required
+@require_POST
+def book_ticket(request, bus_id):
+    """View to book a ticket for a specific bus."""
+    bus = get_object_or_404(Bus, id=bus_id)
+
+    if 'seats' not in request.POST:
+        return JsonResponse({'error': 'Number of seats is required.'}, status=400)
+
+    form = BookingForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({'error': 'Invalid form data.'}, status=400)
+
+    seats = int(request.POST['seats'])
+    if seats <= bus.available_seats:
+        booking = Booking(user=request.user, bus=bus, seats_booked=seats)
+        booking.save()
+
+        bus.available_seats -= seats
+        bus.save()
+
+        return JsonResponse({
+            'message': 'Booking successful.',
+            'booking_id': booking.id,
+        }, status=201)
+    else:
+        return JsonResponse({'error': 'Not enough seats available.'}, status=400)
+
+    # If all checks fail (which shouldn't happen due to the use of get_object_or_404)
+    return JsonResponse({'error': 'Invalid request.'}, status=400)
+
 
 @login_required
 def payment_process(request, booking_id):
@@ -424,20 +470,6 @@ def booking_stats(request):
     return JsonResponse({'stats': list(stats)}, status=200)
 
 
-def register(request):
-    """User registration view."""
-    if request.method == 'POST':
-        form = UserCreationForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return JsonResponse({'message': 'User registered successfully'}, status=201)
-        else:
-            return JsonResponse({'errors': form.errors}, status=400)
-    else:
-        form = UserCreationForm()
-        return JsonResponse({'form': form.as_p()}, status=200)  
-
-
 def browse_buses(request):
     """View to list all buses."""
     buses = Bus.objects.all()
@@ -457,16 +489,18 @@ def browse_buses(request):
 class ApproveMerchantView(generics.UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def patch(self, request, *args, **kwargs):
-        merchant_id = request.data.get('merchant_id')
+    def patch(self, request, merchant_id, *args, **kwargs):
         merchant_to_approve = get_object_or_404(Merchant, id=merchant_id)
-        requesting_merchant = get_object_or_404(Merchant, user=request.user)
-        if requesting_merchant.is_default:
-            merchant_to_approve.approved = True
-            merchant_to_approve.save()
-            return Response({"detail": "Merchant approved successfully."}, status=status.HTTP_200_OK)
-        else:
-            return Response({"detail": "Only the default merchant can approve other merchants."}, status=status.HTTP_403_FORBIDDEN)
+
+        if merchant_to_approve.is_default:
+            return Response({"detail": "Cannot approve a default merchant."}, status=400)
+
+        # Logic to approve the merchant
+        merchant_to_approve.approved = True
+        merchant_to_approve.save()
+
+        return Response({"detail": "Merchant approved successfully."}, status=200)
+
 
 
 class MerchantDetailView(APIView):
@@ -707,6 +741,11 @@ class UserAuthView(APIView):
             }, status=200)
 
         return Response({'detail': 'Invalid credentials'}, status=400)
+    
+    def get(self, request):
+        # Return a simple JSON response or a message indicating that this is a login endpoint
+        return JsonResponse({'message': 'Please use POST to log in.'}, status=200)
+
 
     def clean_request_data(self, data):
         # Sanitize input data to remove any newline or whitespace characters
