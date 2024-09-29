@@ -29,7 +29,7 @@ EASYPAY_MOBILE_MONEY_API_KEY = 'your_mobile_money_api_key'
 EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
@@ -60,8 +60,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    #'bookings.middleware.DisableCSRF',  
+    'django.middleware.csrf.CsrfViewMiddleware', 
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -133,10 +132,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-#SESSION_COOKIE_SECURE = False
-#CSRF_COOKIE_SECURE = False
-#SECURE_SSL_REDIRECT = False
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
@@ -181,12 +176,14 @@ CSRF_TRUSTED_ORIGINS = ['http://localhost:3000',
 
 # Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = False
-CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_HTTPONLY = False  # Should be False to allow JS access
+CSRF_USE_SESSIONS = False  # Generally set to False for API endpoints
 
 # Set up logging for CSRF issues
 logger = logging.getLogger('django.security.csrf')
 logger.setLevel(logging.DEBUG)
 
+LOGIN_URL = '/api/login/'
 
 
 
