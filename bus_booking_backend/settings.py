@@ -29,7 +29,7 @@ EASYPAY_MOBILE_MONEY_API_KEY = 'your_mobile_money_api_key'
 EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
