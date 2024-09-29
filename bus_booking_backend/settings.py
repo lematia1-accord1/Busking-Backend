@@ -176,11 +176,16 @@ REST_FRAMEWORK = {
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',        # Localhost development
     'http://localhost:19006',       # Another localhost for your app
+    'http://127.0.0.1:8000',
     'https://web-production-fb0d.up.railway.app'  # Production URL
 ]
 
-CORS_ALLOWED_ORIGINS = ['https://web-production-fb0d.up.railway.app']
-
+CORS_ALLOWED_ORIGINS = [
+    'https://web-production-fb0d.up.railway.app',  # Production URL
+    'http://localhost:3000',                        # Localhost development
+    'http://localhost:19006',                       # Another localhost for your app
+    'http://127.0.0.1:8000',                        # Localhost testing
+]
 
 # Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = True
