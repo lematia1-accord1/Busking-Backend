@@ -23,10 +23,14 @@ class CSRFMiddlewareDebug(MiddlewareMixin):
         return None
     
 class CustomCSRFMiddleware(CsrfViewMiddleware):
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        if request.method in ['POST', 'PUT', 'DELETE']:  # Methods that require CSRF
+            return super().process_view(request, view_func, view_args, view_kwargs)
+        return None
+
     def _reject(self, request, reason):
         # Customize the response when CSRF validation fails
         return JsonResponse({'error': 'CSRF token missing or incorrect.'}, status=403)
-    
 
 class RemoveNewlinesMiddleware:
     def __init__(self, get_response):
