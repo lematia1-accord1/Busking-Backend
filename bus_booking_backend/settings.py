@@ -31,7 +31,10 @@ EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+#ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
+
+
 
 
 # Application definition
@@ -171,8 +174,14 @@ REST_FRAMEWORK = {
 
 # Add this to manage token expiration and other JWT settings
 # Add trusted origins if needed
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000',
-                        "http://localhost:19006",]  # Adjust based on your frontend URL
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',        # Localhost development
+    'http://localhost:19006',       # Another localhost for your app
+    'https://web-production-fb0d.up.railway.app'  # Production URL
+]
+
+CORS_ALLOWED_ORIGINS = ['https://web-production-fb0d.up.railway.app']
+
 
 # Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = False
