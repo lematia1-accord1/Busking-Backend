@@ -76,6 +76,10 @@ class CSRFTokenView(APIView):
         csrf_token = get_token(request)
         return JsonResponse({'csrfToken': csrf_token})
 
+def csrf_failure_view(request, reason=""):
+    return JsonResponse({'error': 'CSRF verification failed. Please try again.'}, status=403)
+
+
 # User Views
 class UserListCreateView(generics.ListCreateAPIView):
     serializer_class = UserSerializer
@@ -123,7 +127,6 @@ class UserDetailView(generics.RetrieveAPIView):
         })
 
     
-# User Registration API
 #User registration view (POST)
 @method_decorator(csrf_protect, name='dispatch')
 class RegisterView(View):
@@ -319,41 +322,6 @@ class BookingRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
 
-
-""" @login_required
-@require_POST
-def book_ticket(request, bus_id=None):
-
-    bus = get_object_or_404(Bus, id=bus_id) if bus_id else None
-
-    data = {}
-    if bus:
-        # Ensure 'seats' is included in the request
-        if 'seats' not in request.POST:
-            data['error'] = 'Number of seats is required.'
-            return JsonResponse(data, status=400)
-
-        # Validate the form data
-        form = BookingForm(request.POST)
-        if form.is_valid():
-            seats = int(request.POST['seats'])
-            if seats <= bus.available_seats:
-                booking = Booking(user=request.user, bus=bus, seats_booked=seats)
-                booking.save()
-                
-                # Update available seats
-                bus.available_seats -= seats
-                bus.save()
-                
-                data['message'] = 'Booking successful.'
-                data['booking_id'] = booking.id
-                return JsonResponse(data, status=201)
-            else:
-                data['error'] = 'Not enough seats available.'
-                return JsonResponse(data, status=400)
-
-    data['error'] = 'Invalid request.'
-    return JsonResponse(data, status=400) """
 
 @login_required
 @require_POST

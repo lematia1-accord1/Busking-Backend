@@ -227,4 +227,3 @@ class Route(models.Model):
 
     def __str__(self):
         return f"Route from {self.start_location} to {self.end_location}"
-

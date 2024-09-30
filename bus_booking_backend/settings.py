@@ -31,9 +31,9 @@ EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 # SECURITY WARNING: don't run with debug turned on in production!
 #DEBUG = False
 
-#ALLOWED_HOSTS = ['*']
-ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
+ALLOWED_HOSTS = ['*']
+#ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
+#ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
 
 # Application definition
 
@@ -197,7 +197,6 @@ logger = logging.getLogger('django.security.csrf')
 logger.setLevel(logging.DEBUG)
 
 LOGIN_URL = '/api/login/'
-
 
 
 
