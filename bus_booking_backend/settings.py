@@ -35,6 +35,12 @@ ALLOWED_HOSTS = ['*']
 #ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
 #ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://web-production-fb0d.up.railway.app',
+
+]
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -65,7 +71,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'bookings.middleware.CSRFMiddlewareDebug',
     'bookings.middleware.CustomCSRFMiddleware',
     'bookings.middleware.RemoveNewlinesMiddleware',
     'bookings.middleware.CleanRequestMiddleware',
