@@ -133,15 +133,12 @@ class Booking(models.Model):
     def __str__(self):
         return f'Booking {self.id} for {self.user.username} on {self.bus.name}'
 
-
-
 # Define the Customer model
 class Customer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.user.username
-
 
 # Define the Payment model with direct requests integration
 class Payment(models.Model):

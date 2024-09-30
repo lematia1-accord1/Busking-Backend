@@ -79,7 +79,6 @@ class CSRFTokenView(APIView):
 def csrf_failure_view(request, reason=""):
     return JsonResponse({'error': 'CSRF verification failed. Please try again.'}, status=403)
 
-
 # User Views
 class UserListCreateView(generics.ListCreateAPIView):
     serializer_class = UserSerializer

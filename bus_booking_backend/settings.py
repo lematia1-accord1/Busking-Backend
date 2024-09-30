@@ -32,17 +32,8 @@ EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 #DEBUG = False
 
 ALLOWED_HOSTS = ['*']
-#ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
-#ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
-
-CSRF_TRUSTED_ORIGINS = [
-    'https://web-production-fb0d.up.railway.app',
-
-]
-
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -156,15 +147,10 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 CORS_ALLOW_ALL_ORIGINS = True  # For development purposes; change to specific origins in production
 
-""" REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-}
- """
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',  # Optional
+        'rest_framework.authentication.SessionAuthentication',  
         'rest_framework.authentication.BasicAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
                 'rest_framework.authentication.TokenAuthentication',
@@ -176,7 +162,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-# Add this to manage token expiration and other JWT settings
 # Add trusted origins if needed
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',        # Localhost development
@@ -189,13 +174,17 @@ CORS_ALLOWED_ORIGINS = [
     'https://web-production-fb0d.up.railway.app',  # Production URL
     'http://localhost:3000',                        # Localhost development
     'http://localhost:19006',                       # Another localhost for your app
-    'http://127.0.0.1:8000',                        # Localhost testing
+    'http://127.0.0.1:8000',
+    "http://127.0.0.1:3000",
+
 ]
 
 # Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = False  # Should be False to allow JS access
 CSRF_USE_SESSIONS = False  # Generally set to False for API endpoints
+CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # To log the failures for debugging
+
 
 # Set up logging for CSRF issues
 logger = logging.getLogger('django.security.csrf')

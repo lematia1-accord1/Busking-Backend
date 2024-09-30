@@ -195,5 +195,4 @@ admin.site.register(Customer, CustomerAdmin)
 admin.site.register(Booking, BookingAdmin)
 admin.site.register(Bus, BusAdmin)
 
-# Unregister default User model to use custom
-#admin.site.unregister(User)
+
