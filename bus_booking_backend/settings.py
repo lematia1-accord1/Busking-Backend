@@ -18,7 +18,7 @@ import logging
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -32,7 +32,6 @@ EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 DEBUG = False
 
 ALLOWED_HOSTS = ['*']
-<<<<<<< HEAD
 #ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
 #ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
 
@@ -41,8 +40,6 @@ ALLOWED_HOSTS = ['*']
 
 # ]
 
-=======
->>>>>>> ff2a25a8b53cda232446cf83334d8328222efb64
 
 # Application definition
 INSTALLED_APPS = [
