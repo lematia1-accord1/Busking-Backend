@@ -58,8 +58,6 @@ urlpatterns = [
     path('merchants/<int:pk>/', MerchantDetailView.as_view(), name='merchant-detail'),
     path('merchants/<int:merchant_id>/approve/', ApproveMerchantView.as_view(), name='approve-merchant'),
 
-    #path('merchants/approve/', ApproveMerchantView.as_view(), name='approve-merchant'),
-
     #bus URLS
     path('buses/<int:pk>/', BusRetrieveUpdateDestroyView.as_view(), name='bus-detail'), 
     path('buses/<int:bus_id>/book/<int:number_of_seats>/', BookBusView.as_view(), name='book-bus'),
