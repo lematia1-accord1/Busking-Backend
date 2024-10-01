@@ -29,9 +29,17 @@ EASYPAY_MOBILE_MONEY_API_KEY = 'your_mobile_money_api_key'
 EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-#DEBUG = False
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
+#ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
+#ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
+
+# CSRF_TRUSTED_ORIGINS = [
+#     'https://web-production-fb0d.up.railway.app',
+
+# ]
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -167,11 +175,11 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',        # Localhost development
     'http://localhost:19006',       # Another localhost for your app
     'http://127.0.0.1:8000',
-    'https://web-production-fb0d.up.railway.app'  # Production URL
+    'https://web-production-84665.up.railway.app'  # Production URL
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'https://web-production-fb0d.up.railway.app',  # Production URL
+    'https://web-production-84665.up.railway.app',  # Production URL
     'http://localhost:3000',                        # Localhost development
     'http://localhost:19006',                       # Another localhost for your app
     'http://127.0.0.1:8000',
