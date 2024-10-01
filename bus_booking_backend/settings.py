@@ -35,10 +35,10 @@ ALLOWED_HOSTS = ['*']
 #ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
 #ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://web-production-fb0d.up.railway.app',
+# CSRF_TRUSTED_ORIGINS = [
+#     'https://web-production-fb0d.up.railway.app',
 
-]
+# ]
 
 
 # Application definition
@@ -182,11 +182,11 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',        # Localhost development
     'http://localhost:19006',       # Another localhost for your app
     'http://127.0.0.1:8000',
-    'https://web-production-fb0d.up.railway.app'  # Production URL
+    'https://web-production-84665.up.railway.app'  # Production URL
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'https://web-production-fb0d.up.railway.app',  # Production URL
+    'https://web-production-84665.up.railway.app',  # Production URL
     'http://localhost:3000',                        # Localhost development
     'http://localhost:19006',                       # Another localhost for your app
     'http://127.0.0.1:8000',                        # Localhost testing
