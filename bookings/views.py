@@ -1,5 +1,5 @@
 import logging
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.core.exceptions import ValidationError
@@ -15,19 +15,15 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core.mail import send_mail
 import requests
 from django.contrib.auth.forms import UserChangeForm
-from django.contrib.auth.forms import UserCreationForm
 from rest_framework.views import APIView
 from .easypay_mobile_money import EasyPayMobileMoney
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import IsAuthenticated
 from .models import Destination, Route
-from rest_framework.generics import ListAPIView, RetrieveAPIView, CreateAPIView  
-from django.views.generic.edit import CreateView
-from django.urls import reverse_lazy
+from rest_framework.generics import ListAPIView, RetrieveAPIView 
 from django.middleware.csrf import get_token
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -36,7 +32,7 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.http import JsonResponse,HttpResponse
 from django.views import View
 import json
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
@@ -44,12 +40,17 @@ import re
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.decorators import api_view
-
+from django.http import HttpResponseForbidden
+from django.db import IntegrityError
+from rest_framework import serializers  
 
 from .models import Bus, Merchant, Booking, Customer, Payment
 from .serializers import UserSerializer, BusSerializer, BookingSerializer,CustomTokenObtainPairSerializer, DestinationSerializer, MerchantSerializer, CustomerSerializer, DestinationSerializer, RouteSerializer
 from .forms import BookingForm
+
+
+# User model
+User = get_user_model()
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -57,9 +58,17 @@ logger = logging.getLogger(__name__)
 def home(request):
     return HttpResponse("Welcome to the home page!")
 
+class AdminView(View):
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden("You need to be logged in to access this page.")
+        
+        if not request.user.is_staff:  
+            return HttpResponseForbidden("You do not have permission to access this page.")
+        
+        # Your logic here (for authorized admin users)
+        return HttpResponse("Admin Dashboard")
 
-# User model
-User = get_user_model()
 
 def clean_request_data(data):
     # Implement your data cleaning logic here
@@ -75,6 +84,12 @@ class CSRFTokenView(APIView):
     def get(self, request, *args, **kwargs):
         csrf_token = get_token(request)
         return JsonResponse({'csrfToken': csrf_token})
+
+class CsrfTestView(APIView):
+    @ensure_csrf_cookie  
+    def get(self, request):
+        return Response({'status': 'CSRF cookie set'})
+
 
 def csrf_failure_view(request, reason=""):
     return JsonResponse({'error': 'CSRF verification failed. Please try again.'}, status=403)
@@ -191,16 +206,20 @@ def edit_profile(request):
 
 
 # For authenticated users to create buses
+@method_decorator(csrf_protect, name='dispatch')  
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class BusCreateView(generics.CreateAPIView):
     serializer_class = BusSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
         merchant = get_object_or_404(Merchant, user=self.request.user)
+
         if merchant.approved:
             serializer.save(merchant=merchant)
         else:
             raise ValidationError("Merchant must be approved to add buses.")
+
 
 # For all users to list buses
 class BusListView(generics.ListCreateAPIView):
@@ -311,12 +330,52 @@ def view_available_buses(request):
 # Booking Views
 class BookingListCreateView(generics.ListCreateAPIView):
     serializer_class = BookingSerializer
-    #permission_classes = [permissions.IsAuthenticated]
     permission_classes = [AllowAny]
 
     def get_queryset(self):
         return Booking.objects.all()
-    
+
+    def perform_create(self, serializer):
+        # Extract the bus data and requested seats from the request data
+        bus_data = self.request.data.get('bus')
+        seats_requested = self.request.data.get('seats')
+
+        # Validate bus data
+        if not bus_data or not isinstance(bus_data, dict) or 'id' not in bus_data:
+            # Return a 400 error if the bus data is not provided correctly
+            raise serializers.ValidationError({'error': 'Bus data is required.'})
+
+        bus_id = bus_data['id']  # Get the bus ID from the bus data
+
+        try:
+            # Fetch the bus object
+            bus = Bus.objects.get(id=bus_id)
+        except Bus.DoesNotExist:
+            # Raise a validation error if the bus does not exist
+            raise serializers.ValidationError({'error': 'Bus not found.'})
+
+        # Validate the seats_requested
+        if seats_requested is None:
+            raise serializers.ValidationError({'error': 'Seats requested is required.'})
+
+        try:
+            # Convert seats_requested to an integer
+            seats_requested = int(seats_requested)
+        except (ValueError, TypeError):
+            raise serializers.ValidationError({'error': 'Invalid number of seats requested.'})
+
+        # Check if requested seats exceed available seats
+        if seats_requested <= 0:
+            raise serializers.ValidationError({'error': 'The number of seats must be greater than zero.'})
+
+        if seats_requested > bus.available_seats:
+            raise serializers.ValidationError({'error': 'Not enough seats available.'})
+
+        # Save the booking if all checks pass
+        serializer.save(bus=bus, seats=seats_requested)
+
+
+
 class BookingRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
@@ -467,7 +526,13 @@ class ApproveMerchantView(generics.UpdateAPIView):
         merchant_to_approve.save()
 
         return Response({"detail": "Merchant approved successfully."}, status=200)
-
+    
+def create_merchant_for_user(user):
+    # Check if the user already has a merchant
+    if Merchant.objects.filter(user=user).exists():
+        raise IntegrityError("This user already has a Merchant.")
+    # Proceed to create the Merchant
+    return Merchant.objects.create(user=user)
 
 
 class MerchantDetailView(APIView):
@@ -518,10 +583,14 @@ class MerchantCreateView(APIView):
             user = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+
+        # Check if the user already has a Merchant
+        if Merchant.objects.filter(user=user).exists():
+            raise ValidationError("This user already has a Merchant.")
+
         # Update the request data to include the user ID
         request.data['user'] = user.id
-        
+
         serializer = MerchantSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -712,6 +781,8 @@ class UserAuthView(APIView):
     def get(self, request):
         # Return a simple JSON response or a message indicating that this is a login endpoint
         return JsonResponse({'message': 'Please use POST to log in.'}, status=200)
+    
+
 
 
     def clean_request_data(self, data):

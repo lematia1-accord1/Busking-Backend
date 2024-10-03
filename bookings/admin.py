@@ -1,21 +1,17 @@
 from django.contrib import admin
 from django.db.models import Sum
-from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.contrib.admin import SimpleListFilter
-from .models import Bus, Booking, Merchant, Customer, Payment, Route
+from .models import Bus, Booking, Merchant, Customer, Payment
 from .forms import BookingForm
-from django.middleware.csrf import get_token
 from django.conf import settings
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth import login
-from django.shortcuts import redirect, render
 from django.http import HttpResponse
 import csv
 import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 from .models import User
+User = get_user_model()
 
 # Admin for Merchant
 class MerchantAdmin(admin.ModelAdmin):
@@ -42,6 +38,13 @@ class MerchantAdmin(admin.ModelAdmin):
     def user_is_active(self, obj):
         return obj.user.is_active
     user_is_active.short_description = 'Active Status'
+
+class CustomAdminSite(admin.AdminSite):
+    def has_permission(self, request):
+        # Only allow superusers to access the admin panel
+        return request.user.is_active and request.user.is_superuser
+
+admin_site = CustomAdminSite(name='custom_admin')
 
 
 class BusRoutesFilter(admin.SimpleListFilter):
@@ -119,9 +122,6 @@ class BookingAdmin(admin.ModelAdmin):
             return self.readonly_fields + ('is_paid',)
         return self.readonly_fields
 
-#User = settings.AUTH_USER_MODEL
-User = get_user_model()
-
 
 # Admin for User
 class UserAdmin(admin.ModelAdmin):
@@ -188,11 +188,11 @@ class PaymentAdmin(admin.ModelAdmin):
                 self.message_user(request, f"Error processing refund: {str(e)}", level='error')
 
 # Register models with their respective admin classes
-admin.site.register(Payment, PaymentAdmin)
-admin.site.register(User, UserAdmin)
-admin.site.register(Merchant, MerchantAdmin)
-admin.site.register(Customer, CustomerAdmin)
-admin.site.register(Booking, BookingAdmin)
-admin.site.register(Bus, BusAdmin)
+admin_site.register(Payment, PaymentAdmin)
+admin_site.register(User, UserAdmin)
+admin_site.register(Merchant, MerchantAdmin)
+admin_site.register(Customer, CustomerAdmin)
+admin_site.register(Booking, BookingAdmin)
+
 
 

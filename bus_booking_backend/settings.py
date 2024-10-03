@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 import os
 import logging
+from corsheaders.defaults import default_headers
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -32,13 +33,6 @@ EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 DEBUG = False
 
 ALLOWED_HOSTS = ['*']
-#ALLOWED_HOSTS = ['web-production-fb0d.up.railway.app']
-#ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'web-production-fb0d.up.railway.app').split(',')
-
-# CSRF_TRUSTED_ORIGINS = [
-#     'https://web-production-fb0d.up.railway.app',
-
-# ]
 
 
 # Application definition
@@ -186,6 +180,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 
 ]
+
+# Allow specific headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-api-key',  # Add your custom header here
+]
+
 
 # Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = True

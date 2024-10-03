@@ -1,5 +1,4 @@
 from django.urls import path
-from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from . import views
 from .views import (
@@ -31,17 +30,22 @@ from .views import (
     view_available_buses,
     book_ticket,
     RegisterView,
+    AdminView,
+    CsrfTestView,
     
     )
 
 urlpatterns = [
+
+    path('csrf-test/', CsrfTestView.as_view(), name='csrf-test'),
+
+    path('admin/dashboard/', AdminView.as_view(), name='admin-dashboard'),
 
     path('csrf-token/', CSRFTokenView.as_view(), name='csrf_token'),
     path('token/obtain/', CustomTokenObtainPairView.as_view(), name='token-obtain'),
     path('token/refresh/', CustomTokenRefreshView.as_view(), name='token-refresh'),
 
     # User URLs
-     # User management
     path('users/', UserListCreateView.as_view(), name='user-list-create'),
     path('users/<int:pk>/', UserRetrieveUpdateDestroyView.as_view(), name='user-detail'),
 
@@ -95,5 +99,5 @@ urlpatterns = [
     #Distination and Route
     path('destinations/', DestinationListView.as_view(), name='destination-list'),
     path('destinations/create/', CreateDestinationView.as_view(), name='create-destination'),
-    path('destinations/<int:pk>/', DestinationDetailView.as_view(), name='destination-detail'),  # For details
+    path('destinations/<int:pk>/', DestinationDetailView.as_view(), name='destination-detail'),  
 ]

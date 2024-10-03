@@ -19,10 +19,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from bookings.views import home
-
+from bookings.admin import admin_site
 
 
 urlpatterns = [
+    path('admin/', admin_site.urls),  
     path('admin/', admin.site.urls),
     path('api/', include('bookings.urls')),
     path('', home),

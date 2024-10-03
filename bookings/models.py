@@ -1,4 +1,3 @@
-
 import requests
 from django.db import models
 from django.contrib.auth.models import AbstractUser
@@ -58,7 +57,7 @@ class Bus(models.Model):
     name = models.CharField(max_length=100)
     departure_time = models.DateTimeField()
     arrival_time = models.DateTimeField()
-    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name='buses')  
     license_plate = models.CharField(max_length=10, unique=True)
     total_seats = models.IntegerField()
     bus_routes = models.TextField(blank=True)
@@ -106,8 +105,7 @@ class Bus(models.Model):
 
 # Define the Booking model
 class Booking(models.Model):
-    #user = models.ForeignKey(User, on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=1)  # Provide a default value
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, default=1)
     bus = models.ForeignKey(Bus, related_name='bookings', on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     email = models.EmailField()
@@ -126,12 +124,9 @@ class Booking(models.Model):
             raise ValidationError("Pickup time cannot be in the past.")
         if self.seats > self.bus.available_seats:
             raise ValidationError(f"Cannot book {self.seats} seats. Only {self.bus.available_seats} available.")
-
-    #def __str__(self):
-        #return f"Booking by {self.name} for {self.bus.name}"
-    
-    def __str__(self):
-        return f'Booking {self.id} for {self.user.username} on {self.bus.name}'
+        
+        def __str__(self):
+            return f'Booking {self.id} for {self.user.username} on {self.bus.name}'
 
 # Define the Customer model
 class Customer(models.Model):
@@ -153,7 +148,6 @@ class Payment(models.Model):
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE)  # Link payment to a booking
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_id = models.CharField(max_length=255, unique=True)  # Unique identifier for the payment
-    #transaction_id = models.CharField(max_length=255, unique=True, blank=True, editable=False)
     timestamp = models.DateTimeField(auto_now_add=True)
     refunded = models.BooleanField(default=False)
     currency = models.CharField(max_length=10, default='USD')  # Currency type
