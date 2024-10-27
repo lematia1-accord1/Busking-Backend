@@ -7,13 +7,13 @@ from .forms import BookingForm
 from django.conf import settings
 from django.http import HttpResponse
 import csv
+import logging
 import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 from .models import User
 User = get_user_model()
 
-# Admin for Merchant
 class MerchantAdmin(admin.ModelAdmin):
     list_display = ('user', 'bus_company_name', 'user_email', 'user_is_active', 'approved', 'is_default')
     fields = ('user', 'bus_company_name', 'approved', 'is_default') 
@@ -41,7 +41,6 @@ class MerchantAdmin(admin.ModelAdmin):
 
 class CustomAdminSite(admin.AdminSite):
     def has_permission(self, request):
-        # Only allow superusers to access the admin panel
         return request.user.is_active and request.user.is_superuser
 
 admin_site = CustomAdminSite(name='custom_admin')
@@ -60,7 +59,6 @@ class BusRoutesFilter(admin.SimpleListFilter):
             return queryset.filter(bus_routes__id__exact=self.value())
         return queryset
 
-# Admin for Bus
 class BusAdmin(admin.ModelAdmin):
     list_display = ('name', 'merchant', 'license_plate', 'total_seats', 'available_seats', 'departure_time', 'arrival_time', 'bus_routes')
     search_fields = ('name', 'license_plate')
@@ -74,7 +72,6 @@ class BusAdmin(admin.ModelAdmin):
             super().save_model(request, obj, form, change)
 
 
-# Filter for Bus Name in Bookings
 class BusNameFilter(SimpleListFilter):
     title = _('Bus Name')
     parameter_name = 'bus__name'
@@ -89,24 +86,34 @@ class BusNameFilter(SimpleListFilter):
         return queryset
 
 
-# Admin for Booking
 class BookingAdmin(admin.ModelAdmin):
     form = BookingForm
+
+    actions = ['export_to_csv']
+
     list_display = ('bus_name', 'name', 'booking_date', 'seats', 'pickup_location', 'destination', 'expected_journey_duration', 'is_paid')
     list_filter = ('bus', 'booking_date', 'destination', 'is_paid')
     search_fields = ('name', 'email')
-    actions = ['export_to_csv']
 
     def export_to_csv(self, request, queryset):
+        logging.warning('Export to CSV action triggered.') 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="bookings.csv"'
+
         writer = csv.writer(response)
-        writer.writerow(['User', 'Bus', 'Seats Booked', 'Booking Time'])
+        writer.writerow(['User', 'Bus', 'Seats Booked', 'Booking Date'])
+
         for booking in queryset:
-            writer.writerow([booking.user.username, booking.bus.name, booking.seats, booking.booking_date])
+            writer.writerow([
+                booking.user.username if booking.user else 'N/A',
+                booking.bus.name if booking.bus else 'N/A',
+                booking.seats,
+                booking.booking_date
+            ])
         return response
 
     export_to_csv.short_description = "Export selected bookings to CSV"
+
 
     def bus_name(self, obj):
         return obj.bus.name if obj.bus else 'No Bus Assigned'
@@ -123,7 +130,6 @@ class BookingAdmin(admin.ModelAdmin):
         return self.readonly_fields
 
 
-# Admin for User
 class UserAdmin(admin.ModelAdmin):
     model = User
     list_display = ('username', 'email', 'is_active', 'date_joined')
@@ -132,7 +138,6 @@ class UserAdmin(admin.ModelAdmin):
     ordering = ('-date_joined',)
 
 
-# Admin for Customer
 class CustomerAdmin(admin.ModelAdmin):
     list_display = ('user',)
 
@@ -153,7 +158,6 @@ class PaymentStatusFilter(admin.SimpleListFilter):
             return queryset.filter(status=self.value())
         return queryset
     
-# Admin for Payment
 class PaymentAdmin(admin.ModelAdmin):
     list_display = ('user', 'booking', 'amount', 'transaction_id', 'timestamp', 'refunded', 'status')
     search_fields = ('user__username', 'transaction_id')
@@ -187,12 +191,13 @@ class PaymentAdmin(admin.ModelAdmin):
             except Exception as e:
                 self.message_user(request, f"Error processing refund: {str(e)}", level='error')
 
-# Register models with their respective admin classes
+
 admin_site.register(Payment, PaymentAdmin)
 admin_site.register(User, UserAdmin)
 admin_site.register(Merchant, MerchantAdmin)
 admin_site.register(Customer, CustomerAdmin)
 admin_site.register(Booking, BookingAdmin)
+admin_site.register(Bus, BusAdmin)
 
 
 

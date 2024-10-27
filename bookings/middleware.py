@@ -10,12 +10,10 @@ from django.urls import reverse
 
 class CleanRequestMiddleware(MiddlewareMixin):
     def process_request(self, request):
-        # Clean the path of the request
         cleaned_path = re.sub(r'\s+', '', request.path)
         request.path = cleaned_path
 
 
-# bookings/middleware.py
 class CSRFMiddlewareDebug(MiddlewareMixin):
     def process_request(self, request):
         print("CSRF Token in request:", request.META.get('CSRF_COOKIE'))
@@ -28,7 +26,6 @@ class CustomCSRFMiddleware(CsrfViewMiddleware):
         return None
 
     def _reject(self, request, reason):
-        # Customize the response when CSRF validation fails
         return JsonResponse({'error': 'CSRF token missing or incorrect.'}, status=403)
 
 class RemoveNewlinesMiddleware:
@@ -36,11 +33,9 @@ class RemoveNewlinesMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Remove newlines from request path
         cleaned_path = re.sub(r'%0A', '', request.path).strip()
 
         if cleaned_path != request.path:
-            # Redirect to cleaned path or raise error if necessary
             request.path_info = cleaned_path
         
         response = self.get_response(request)

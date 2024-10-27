@@ -9,7 +9,6 @@ def assign_user_role(sender, instance, created, **kwargs):
     Signal to assign role-based permissions to a user upon creation.
     """
     if created:
-        # Dictionary mapping user roles to their respective permissions
         role_permissions = {
             'guest': ['can_view_bus', 'can_view_booking'],
             'registered': [
@@ -19,7 +18,6 @@ def assign_user_role(sender, instance, created, **kwargs):
             'admin': [perm.codename for perm in Permission.objects.all()] 
         }
 
-        # Determine the user's role and fetch corresponding permissions
         if instance.is_guest():
             permissions_to_add = role_permissions['guest']
         elif instance.is_registered():
@@ -29,13 +27,10 @@ def assign_user_role(sender, instance, created, **kwargs):
         else:
             permissions_to_add = []  
 
-        # Assign permissions to the user
         permissions = Permission.objects.filter(codename__in=permissions_to_add)
         if permissions.exists():
             instance.user_permissions.add(*permissions)
 
-        # Optional: Log or handle the case where permissions could not be found
         missing_permissions = set(permissions_to_add) - set(permissions.values_list('codename', flat=True))
         if missing_permissions:
-            # For debugging or logging purposes
             print(f"Warning: Missing permissions: {', '.join(missing_permissions)}")

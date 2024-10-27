@@ -14,14 +14,12 @@ from pathlib import Path
 import os
 import logging
 from corsheaders.defaults import default_headers
+from datetime import timedelta
 
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 DEBUG = False
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-@*d0(4)z&)d#9ctm6f(@7vmf_iqil-9#2-n_g7k0yl&o9*#wpl'
@@ -30,7 +28,7 @@ EASYPAY_MOBILE_MONEY_API_KEY = 'your_mobile_money_api_key'
 EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
@@ -45,8 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'bookings',
-    'rest_framework',  # Add Django REST framework
-    'rest_framework.authtoken',  # Add Token Authentication
+    'rest_framework',
+    'rest_framework.authtoken',
     'rest_framework_simplejwt',
 
     
@@ -143,59 +141,67 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-CORS_ALLOW_ALL_ORIGINS = True  # For development purposes; change to specific origins in production
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  
+        'rest_framework.authentication.TokenAuthentication',  
         'rest_framework.authentication.SessionAuthentication',  
-        'rest_framework.authentication.BasicAuthentication',
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-                'rest_framework.authentication.TokenAuthentication',
-
+        'rest_framework.authentication.BasicAuthentication',  
     ),
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.AllowAny',
         'rest_framework.permissions.IsAuthenticated',  
+        'rest_framework.permissions.AllowAny',
+
     ),
 }
 
-# Add trusted origins if needed
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+}
+
+
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:3000',        # Localhost development
-    'http://localhost:19006',       # Another localhost for your app
+    'http://localhost:3000',
+    'http://localhost:19006',
     'http://127.0.0.1:8000',
-    'http://localhost:8000',           # Localhost
-    'https://web-production-84665.up.railway.app'  # Production URL
+    'http://localhost:8000',           
+    'https://web-production-84665.up.railway.app'  
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'https://web-production-84665.up.railway.app',  # Production URL
-    'http://localhost:3000',                        # Localhost development
-    'http://localhost:19006',                       # Another localhost for your app
+    'https://web-production-84665.up.railway.app',  
+    'http://localhost:3000',                        
+    'http://localhost:19006',                       
     'http://127.0.0.1:8000',
     "http://127.0.0.1:3000",
 
 ]
 
-# Allow specific headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
-    'x-api-key',  # Add your custom header here
+    'x-api-key',  
 ]
 
-
-# Development setting (only for testing, not recommended for production)
 CSRF_COOKIE_SECURE = True
-CSRF_COOKIE_HTTPONLY = False  # Should be False to allow JS access
-CSRF_USE_SESSIONS = False  # Generally set to False for API endpoints
-CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  # To log the failures for debugging
+CSRF_COOKIE_HTTPONLY = False  
+CSRF_USE_SESSIONS = False 
+CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  
 
-
-# Set up logging for CSRF issues
 logger = logging.getLogger('django.security.csrf')
 logger.setLevel(logging.DEBUG)
 
 LOGIN_URL = '/api/login/'
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'lematia1accord1@gmail.com'
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
 
 

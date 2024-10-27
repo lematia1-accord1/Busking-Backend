@@ -9,19 +9,16 @@ class BookingsConfig(AppConfig):
 
     def create_permissions(self, sender, **kwargs):
         try:
-            # Import models within the function to avoid circular imports
             from .models import Bus, Merchant, Booking, User, Customer
             from django.contrib.contenttypes.models import ContentType
             from django.contrib.auth.models import Permission
 
-            # Get the ContentType for your models
             bus_content_type = ContentType.objects.get_for_model(Bus)
             merchant_content_type = ContentType.objects.get_for_model(Merchant)
             booking_content_type = ContentType.objects.get_for_model(Booking)
             user_content_type = ContentType.objects.get_for_model(User)
             customer_content_type = ContentType.objects.get_for_model(Customer)
 
-            # Create permissions for models
             Permission.objects.get_or_create(
                 codename='add_bus',
                 defaults={'name': 'Can add bus', 'content_type': bus_content_type}
@@ -55,9 +52,7 @@ class BookingsConfig(AppConfig):
                 defaults={'name': 'Can view customer', 'content_type': customer_content_type}
             )
         except AppRegistryNotReady:
-            # Handle the case where the app registry isn't ready
             pass
 
     def ready(self):
-        # Connect the signal to create permissions
         post_migrate.connect(self.create_permissions, sender=self)

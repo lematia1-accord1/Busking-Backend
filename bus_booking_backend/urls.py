@@ -24,12 +24,10 @@ urlpatterns = [
     path('admin/', admin_site.urls),  
     path('api/', include('bookings.urls')),
     path('', home),
-    path('api-auth/', include('rest_framework.urls')),  # DRF default login URLs
+    path('api-auth/', include('rest_framework.urls')),
 ]
 
-# Serve media files during development and production
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# Serve static files only when DEBUG = False (production)
 if not settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

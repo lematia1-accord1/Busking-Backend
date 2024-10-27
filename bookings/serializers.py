@@ -5,8 +5,9 @@ from .models import Destination, Route
 from django.conf import settings
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-#User = settings.AUTH_USER_MODEL
+
 User = get_user_model()
+
 class UserSerializer(serializers.ModelSerializer):
     """
     Serializer for User model with controlled field access.
@@ -15,15 +16,24 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'password', 'email', 'first_name', 'last_name', 'user_type']
         extra_kwargs = {
-            'user_type': {'write_only': True},  
+            'user_type': {'write_only': True},
+            'password': {'write_only': True},  
         }
 
     def create(self, validated_data):
+        user_type = validated_data.pop('user_type', None)
+        
         user = User(**validated_data)
-        user.set_password(validated_data['password'])  
+        user.set_password(validated_data['password'])
         user.save()
+
+        if user_type:
+            user.user_type = user_type
+            user.save()
+
         return user
 
+    
 
 class BusSerializer(serializers.ModelSerializer):
     """
@@ -128,7 +138,6 @@ class DestinationSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'city', 'state']
 
 class RouteSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Route
         fields = ['id', 'name', 'start_location', 'end_location']
@@ -139,7 +148,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
 
-        # Add custom claims if necessary (optional)
         token['username'] = user.username
         token['email'] = user.email  
 
@@ -148,11 +156,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
 
-        # Include additional user information in the response
         data['user'] = self.user.username
         data['email'] = self.user.email  
 
         return data
+    
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims if needed
+        token['username'] = user.username
+        
+        return token
+
 
 
 
