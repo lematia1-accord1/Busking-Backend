@@ -34,7 +34,6 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     
-
 class BusSerializer(serializers.ModelSerializer):
     """
     Serializer for Bus model. Includes a read-only field for available_seats.
@@ -50,6 +49,7 @@ class BusSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'bus_routes': {'required': False},  
         }
+
 
 class PaymentSerializer(serializers.ModelSerializer):
     """
@@ -69,19 +69,21 @@ class PaymentSerializer(serializers.ModelSerializer):
             'payment_method': {'read_only': True}, 
         }
 
+
 class BookingSerializer(serializers.ModelSerializer):
     """
     Serializer for Booking model. Includes nested BusSerializer and a custom payment field.
     """
-    bus = BusSerializer() 
-    payment = serializers.SerializerMethodField()  
+    bus = serializers.PrimaryKeyRelatedField(queryset=Bus.objects.all())
+    payment = serializers.SerializerMethodField() 
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, write_only=True)
 
     class Meta:
         model = Booking
         fields = [
             'id', 'bus', 'name', 'email', 'phone', 'seats', 'booking_date', 
             'payment_method', 'pickup_location', 'pickup_time', 
-            'expected_journey_duration', 'destination', 'is_paid', 'payment'
+            'expected_journey_duration', 'destination', 'is_paid', 'payment', 'amount'
         ]
         extra_kwargs = {
             'pickup_time': {'required': False},  
@@ -97,6 +99,15 @@ class BookingSerializer(serializers.ModelSerializer):
             return PaymentSerializer(payment).data
         except Payment.DoesNotExist:
             return None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if 'amount' in representation:
+            representation['amount'] = float(representation['amount'])
+        if 'bus' in representation and isinstance(representation['bus'], dict):
+            representation['bus']['price'] = float(representation['bus'].get('price', 0))
+        return representation
+
 
 class MerchantSerializer(serializers.ModelSerializer):
     """
@@ -137,6 +148,7 @@ class DestinationSerializer(serializers.ModelSerializer):
         model = Destination
         fields = ['id', 'name', 'city', 'state']
 
+
 class RouteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Route
@@ -161,16 +173,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return data
     
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        
-        # Add custom claims if needed
-        token['username'] = user.username
-        
-        return token
-
 
 
 

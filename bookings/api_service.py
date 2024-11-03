@@ -1,6 +1,7 @@
 import requests
 from requests.exceptions import RequestException
 
+
 class APIService:
     BASE_URL = 'https://api.easypay.ug'
     ENDPOINT = '/endpoint'

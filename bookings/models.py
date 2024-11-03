@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.conf import settings
 from django.utils import timezone
+from decimal import Decimal
 
 
 class User(AbstractUser):
@@ -63,10 +64,10 @@ class Bus(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)  
     approved = models.BooleanField(default=False)
     available_seats = models.PositiveIntegerField(blank=True, null=True)
+    
     def __str__(self):
         return self.name
 
-    
     def book_seats(self, number_of_seats):
         if number_of_seats <= 0:
             raise ValidationError("Number of seats must be positive.")
@@ -76,13 +77,6 @@ class Bus(models.Model):
     
         self.available_seats -= number_of_seats
         self.save()
-    
-    def save(self, *args, **kwargs):
-        if self.pk is None:  
-            if self.available_seats is None or self.available_seats == 0:
-                self.available_seats = self.total_seats
-        super().save(*args, **kwargs)
-
     
     def clean(self):
         if self.departure_time >= self.arrival_time:
@@ -103,8 +97,7 @@ class Bus(models.Model):
         
         if self.available_seats > self.total_seats:
             raise ValidationError("Available seats cannot exceed total seats.")
-
-
+    
     @property
     def is_full(self):
         return self.available_seats <= 0
@@ -132,7 +125,7 @@ class Booking(models.Model):
     expected_journey_duration = models.DurationField(null=True, blank=True)
     destination = models.CharField(max_length=255, blank=True)
     is_paid = models.BooleanField(default=False)
-    #created_at = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
     def clean(self):
         if self.pickup_time and self.pickup_time < now():

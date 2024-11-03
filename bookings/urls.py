@@ -1,6 +1,9 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
 from .views import (
     UserListCreateView,
     UserRetrieveUpdateDestroyView,
@@ -12,7 +15,6 @@ from .views import (
     CustomerListView,
     CustomerDetailView,
     ApproveMerchantView,
-    BookBusView,
     EasyPayCallbackView,
     InitiatePaymentView,
     CreateDestinationView,
@@ -35,8 +37,20 @@ from .views import (
     EditProfileView,
     profile_json_view,
     confirm_booking,
+    PaymentProcessView,
     
     )
+
+
+schema_view = get_schema_view(
+    openapi.Info(
+        title="BusKing API",
+        default_version='v1',
+        description="API documentation for BusKing Project",
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
+)
 
 urlpatterns = [
 
@@ -63,8 +77,8 @@ urlpatterns = [
     path('merchants/<int:pk>/', MerchantDetailView.as_view(), name='merchant-detail'),
     path('merchants/<int:merchant_id>/approve/', ApproveMerchantView.as_view(), name='approve-merchant'),
 
+    path('buses/<int:bus_id>/book/<int:number_of_seats>/', BookingListCreateView.as_view(), name='book-bus'),
     path('buses/<int:pk>/', BusRetrieveUpdateDestroyView.as_view(), name='bus-detail'), 
-    path('buses/<int:bus_id>/book/<int:number_of_seats>/', BookBusView.as_view(), name='book-bus'),
     path('buses/', BusListView.as_view(), name='bus-list'), 
     path('buses/create/', BusCreateView.as_view(), name='bus-create'),
     path('available_buses/', view_available_buses, name='available_buses'),
@@ -72,9 +86,12 @@ urlpatterns = [
     path('bookings/', BookingListCreateView.as_view(), name='booking-list-create'),
     path('bookings/<int:pk>/', BookingRetrieveUpdateDestroyView.as_view(), name='booking-detail'),
     path('bookings/confirm/<int:booking_id>/', confirm_booking, name='confirm_booking'),
-        
+    
     path('payment-callback/', EasyPayCallbackView.as_view(), name='payment-callback'),
     path('initiate-payment/', InitiatePaymentView.as_view(), name='initiate_payment'),
+    path('payment/process/<int:booking_id>/', PaymentProcessView.as_view(), name='payment-process'),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
     path('customers/', CustomerListView.as_view(), name='customer-list'),
     path('customers/<int:pk>/', CustomerDetailView.as_view(), name='customer-detail'),

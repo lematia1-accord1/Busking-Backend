@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.conf import settings
 from django.views import View
-from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.mail import send_mail
 import requests
@@ -39,7 +38,14 @@ from django.contrib.auth import update_session_auth_hash
 from datetime import datetime
 from rest_framework.decorators import api_view, permission_classes
 from django.db import transaction
-from rest_framework.parsers import FormParser, MultiPartParser
+from .easypay_mobile_money import EasyPayMobileMoney
+from decimal import Decimal
+import uuid
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 
 from .models import Bus, Merchant, Booking, Customer, Payment
 from .serializers import UserSerializer, BusSerializer, BookingSerializer,CustomTokenObtainPairSerializer, DestinationSerializer, MerchantSerializer, CustomerSerializer, DestinationSerializer, RouteSerializer
@@ -52,10 +58,12 @@ logger = logging.getLogger(__name__)
 def home(request):
     return HttpResponse("Welcome to the home page!")
 
+
 class CSRFTokenView(APIView):
     def get(self, request, *args, **kwargs):
         csrf_token = get_token(request)
         return JsonResponse({'csrfToken': csrf_token})
+
 
 class CsrfTestView(APIView):
     @ensure_csrf_cookie  
@@ -65,6 +73,7 @@ class CsrfTestView(APIView):
 
 def csrf_failure_view(request, reason=""):
     return JsonResponse({'error': 'CSRF verification failed. Please try again.'}, status=403)
+
 
 class UserListCreateView(generics.ListCreateAPIView):
     serializer_class = UserSerializer
@@ -203,7 +212,6 @@ class EditProfileView(APIView):
         return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 @method_decorator(csrf_protect, name='dispatch')  
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class BusCreateView(generics.CreateAPIView):
@@ -237,6 +245,7 @@ class BusListView(generics.ListCreateAPIView):
         
         serializer.save()
     
+
 class SearchBusesView(generics.ListAPIView):
     serializer_class = BusSerializer
 
@@ -297,6 +306,7 @@ def view_available_buses(request):
 class BookingListCreateView(generics.ListCreateAPIView):
     serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
+
     def get_queryset(self):
         queryset = Booking.objects.all()
         logger.debug(f"Total Bookings Found: {queryset.count()}")
@@ -304,12 +314,11 @@ class BookingListCreateView(generics.ListCreateAPIView):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        bus_id = self.request.data.get('bus', {}).get('id')
-        seats_requested = self.request.data.get('seats')
-
-        if not bus_id or not seats_requested:
-            logger.error("Bus data and seats requested are required.")
-            raise serializers.ValidationError({'error': 'Bus data and seats requested are required.'})
+        bus_id = self.kwargs.get('bus_id')
+        seats_requested = self.request.data.get('seats')  
+        if not seats_requested:
+            logger.error("Seats requested are required.")
+            raise serializers.ValidationError({'error': 'Seats requested are required.'})
 
         try:
             bus = Bus.objects.select_for_update().get(id=bus_id)
@@ -322,11 +331,37 @@ class BookingListCreateView(generics.ListCreateAPIView):
             logger.error(f"Bus not found or invalid seat data: {e}")
             raise serializers.ValidationError({'error': 'Bus not found or invalid seat data.'})
 
-        bus.available_seats -= seats_requested
-        bus.save()
+        phone_number = self.request.data.get('phone_number')
+        if not phone_number:
+            logger.error("Phone number is required for payment.")
+            raise serializers.ValidationError({'error': 'Phone number is required.'})
 
-        logger.info(f"Creating booking for user {self.request.user} for bus {bus_id} with {seats_requested} seats.")
-        serializer.save(bus=bus, seats_booked=seats_requested, user=self.request.user)  
+        try:
+            amount = calculate_total_amount(bus_id, seats_requested)
+            amount_float = float(amount) if isinstance(amount, Decimal) else amount
+            transaction_id = generate_transaction_id()
+            description = f"Booking for bus {bus_id} by user {self.request.user.id}"
+
+            easy_pay = EasyPayMobileMoney()
+            payment_response = easy_pay.initiate_transaction(phone_number, amount_float, transaction_id, description)
+
+            bus.available_seats -= seats_requested
+            bus.save()
+
+            logger.info(f"Creating booking for user {self.request.user} for bus {bus_id} with {seats_requested} seats.")
+            booking = serializer.save(bus=bus, seats=seats_requested, user=self.request.user, amount=amount_float)
+
+            self.booking_data = {
+                'message': 'Booking successful',
+                'booking_id': booking.id,
+                'payment': payment_response,
+                'amount': amount_float
+            }
+
+        except Exception as e:
+            logger.error(f"Unexpected error during booking: {str(e)}")
+            raise serializers.ValidationError({'error': 'An error occurred while processing the booking.'})
+
 
 class BookingRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BookingSerializer
@@ -349,24 +384,7 @@ class BookingRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(serializer.data)
-
-
-@login_required
-def payment_process(request, booking_id):
-    """View to process payment for a specific booking."""
-    booking = get_object_or_404(Booking, id=booking_id, user=request.user)
-
-    data = {
-        'booking_id': booking.id,
-        'bus_name': booking.bus.name,
-        'departure_time': booking.bus.departure_time,
-        'arrival_time': booking.bus.arrival_time,
-        'price': booking.bus.price,
-        'seats_booked': booking.seats_booked,
-        'user_email': booking.user.email,
-    }
-    return JsonResponse(data, status=200)
-
+    
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -376,13 +394,12 @@ def confirm_booking(request, booking_id):
     send_mail(
         'Booking Confirmation',
         f'Your booking for {booking.bus.name} is confirmed.',
-        None,
+        settings.DEFAULT_FROM_EMAIL,
         [booking.user.email],
         fail_silently=False,
     )
 
     return Response({"detail": "Booking confirmed successfully."}, status=status.HTTP_200_OK)
-
 
 
 @staff_member_required
@@ -400,6 +417,60 @@ def booking_stats(request):
     stats = Booking.objects.values('bus__name').annotate(total=Count('id'))
     
     return JsonResponse({'stats': list(stats)}, status=200)
+
+
+def calculate_total_amount(bus_id, number_of_seats):
+    bus = get_object_or_404(Bus, id=bus_id)
+    total_price = bus.price * Decimal(number_of_seats)
+    return total_price
+
+
+def generate_transaction_id():
+    """
+    Generate a unique transaction ID.
+
+    Returns:
+        str: A unique transaction ID.
+    """
+    return str(uuid.uuid4())
+
+
+def convert_decimals_to_floats(data):
+    """Recursively convert Decimal types in data to floats."""
+    if isinstance(data, dict):
+        return {key: convert_decimals_to_floats(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_decimals_to_floats(item) for item in data]
+    elif isinstance(data, Decimal):
+        return float(data)
+    return data
+
+
+def create_booking(bus_id, number_of_seats, user, data, easy_pay, amount):
+    phone_number = data.get('phone_number')
+    pickup_time_str = data.get('pickup_time')
+    
+    try:
+        pickup_datetime = datetime.strptime(pickup_time_str, "%I:%M %p")
+    except ValueError:
+        raise Exception("Invalid pickup time format. Please use 'HH:MM AM/PM' format.")
+    
+    transaction_id = generate_transaction_id()  
+    description = f"Booking for bus {bus_id} by user {user.id}"  
+
+    payment_response = easy_pay.initiate_transaction(phone_number, float(amount), transaction_id, description)
+
+    booking = Booking.objects.create(
+        user=user,
+        bus=get_object_or_404(Bus, id=bus_id),
+        name=data.get('name'),
+        email=data.get('email'),
+        phone=data.get('phone'),
+        seats=number_of_seats,
+        pickup_time=pickup_datetime,
+    )
+
+    return booking, payment_response
 
 
 class ApproveMerchantView(generics.UpdateAPIView):
@@ -462,6 +533,7 @@ class MerchantListView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class MerchantCreateView(APIView):
     def post(self, request):
         username = request.data.get('user')
@@ -497,90 +569,7 @@ class CustomerDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return Customer.objects.all()
 
-class BookBusView(View):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request, bus_id, number_of_seats, *args, **kwargs):
-        logger.debug(f"Request data: {request.body}")
-        logger.debug(f"Bus ID: {bus_id}, Number of Seats: {number_of_seats}")
-
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
-        bus = get_object_or_404(Bus, id=bus_id)
-        logger.debug(f"Available seats for bus {bus.id}: {bus.available_seats}")
-
-        if number_of_seats > bus.available_seats:
-            return JsonResponse({'error': 'Not enough seats available.'}, status=400)
-        
-        try:
-            pickup_time_str = data.get('pickup_time')
-            booking_date_str = data.get('booking_date')
-            pickup_time = datetime.strptime(pickup_time_str, '%I:%M %p').time()
-            booking_date = datetime.strptime(booking_date_str, '%Y-%m-%d').date()
-            pickup_datetime = datetime.combine(booking_date, pickup_time)
-        except (TypeError, ValueError):
-            return JsonResponse({'error': 'Invalid pickup_time or booking_date format.'}, status=400)
-
-        try:
-            booking, payment_response = create_booking(bus_id, number_of_seats, request.user, data)
-        except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=400)
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            return JsonResponse({'error': 'An unexpected error occurred. Please try again.'}, status=500)
-
-        return JsonResponse({
-            'message': 'Booking successful',
-            'booking_id': booking.id,
-            'pickup_datetime': pickup_datetime.isoformat(),
-            'payment': payment_response  
-        }, status=201)
-
-
-def create_booking(bus_id, number_of_seats, user, data):
-    bus = get_object_or_404(Bus, id=bus_id)
-
-    try:
-        bus.book_seats(number_of_seats)  
-    except ValidationError as e:
-        raise ValueError(str(e))
-
-    booking = Booking.objects.create(
-        user=user,
-        bus=bus,
-        seats_booked=number_of_seats,
-        pickup_time=data.get('pickup_time'),
-        booking_date=data.get('booking_date'),
-        pickup_location=data.get('pickup_location'),
-        expected_journey_duration=data.get('expected_journey_duration'),
-        destination=data.get('destination'),
-    )
-
-    payment_data = {
-        'amount': booking.calculate_total_price(),  
-        'currency': 'UGX',
-        'reference': booking.id
-    }
-    headers = {
-        'Authorization': f'Bearer {settings.EASYPAY_ACCESS_TOKEN}',
-        'Content-Type': 'application/json'
-    }
-
-    try:
-        response = requests.post('https://api.easypay.ug/endpoint', headers=headers, json=payment_data)
-        response.raise_for_status()
-        payment_response = response.json()
-        logger.info(f"Payment initiated successfully for Booking ID: {booking.id}, Response: {payment_response}")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error during payment initiation for Booking ID: {booking.id}: {str(e)}")
-        raise ValueError("Payment initiation failed. Please try again.")
-
-    return booking, payment_response
-
-    
 @method_decorator(csrf_exempt, name='dispatch')
 class EasyPayCallbackView(View):
     def post(self, request, *args, **kwargs):
@@ -614,47 +603,159 @@ class EasyPayCallbackView(View):
         except Payment.DoesNotExist:
             return redirect('payment_failed')
 
+
 class InitiatePaymentView(APIView):
+    """
+    Initiate a mobile money payment for a booking using EasyPay.
+    
+    **POST** /api/initiate-payment/
+    
+    ### Request Parameters:
+    - `booking_id` (int): ID of the booking to be paid. **Required**
+    - `phone_number` (str): Customer's mobile number. **Required**
+    - `amount` (float): Amount to be paid in currency. **Required**
+    
+    ### Success Response:
+    - `HTTP 200 OK`: Payment initiation success message.
+    
+    ### Error Responses:
+    - `HTTP 404 Not Found`: Booking not found.
+    - `HTTP 400 Bad Request`: Payment initiation failed.
+    - `HTTP 500 Internal Server Error`: An error occurred during processing.
+    """
+
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'booking_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the booking to be paid'),
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description="Customer's mobile number"),
+                'amount': openapi.Schema(type=openapi.TYPE_NUMBER, format='float', description='Amount to be paid in currency'),
+            },
+            required=['booking_id', 'phone_number', 'amount'],
+        ),
+        responses={
+            200: openapi.Response('Payment initiated successfully'),
+            400: openapi.Response('Payment initiation failed'),
+            404: openapi.Response('Booking not found'),
+            500: openapi.Response('An error occurred')
+        }
+    )
     def post(self, request, *args, **kwargs):
-        
         booking_id = request.data.get('booking_id')
         phone_number = request.data.get('phone_number')
         amount = request.data.get('amount')
-
+        
         try:
-            
             booking = Booking.objects.get(id=booking_id)
-
-            easypay = EasyPayMobileMoney()
-
-            payment_response = easypay.initiate_transaction(
-                phone_number=phone_number,
-                amount=amount,
-                transaction_id=f"BOOKING-{booking.id}",
-                description=f"Payment for booking {booking.id}"
-            )
-
+            transaction_id = f"trans_{booking.id}"
+            description = f"Payment for booking {booking.id}"
             
-            if payment_response.get('status') == 'success':
+            url = 'https://www.easypay.co.ug/api/'
+
+            headers = {
+                'Authorization': 'Bearer YOUR_ACCESS_TOKEN',  
+                'Content-Type': 'application/json',
+            }
+            payload = {
+                'username': '___YOUR CLIENT ID___',
+                'password': '___YOUR CLIENT SECRET___',
+                'action': 'mmdeposit',
+                'amount': amount,
+                'phone': phone_number,
+                'currency': 'UGX',
+                'reference': booking.id,
+                'reason': description
+            }
+            
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["POST"]
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            http = requests.Session()
+            http.mount("https://", adapter)
+            
+            response = http.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            payment_data = response.json()
+            if payment_data.get('status') == 'success':
                 Payment.objects.create(
-                    user=request.user,  
+                    user=request.user,
                     booking=booking,
                     amount=amount,
-                    transaction_id=payment_response.get('transaction_id'),
+                    transaction_id=payment_data.get('transaction_id'),
                     status='pending',
                     payment_method='EasyPay'
                 )
-
                 return Response({"message": "Payment initiated successfully"}, status=status.HTTP_200_OK)
             else:
-                return Response({"error": "Payment initiation failed", "details": payment_response.get('message')}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Payment initiation failed", "details": payment_data.get('message')},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         except Booking.DoesNotExist:
             return Response({"error": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
-        except ValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except requests.exceptions.RequestException as e:
+            return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PaymentProcessView(APIView):
+    """
+    View to process payment details for a specific booking.
+
+    **URL**: `/api/payment/process/<int:booking_id>/`
+
+    **Methods**: `GET`
+
+    **Authentication**: Requires the user to be logged in and either a staff member or the owner of the booking.
+
+    ### Path Parameters:
+    - `booking_id` (int): The ID of the booking for which payment details are needed.
+
+    ### Success Response:
+    - `HTTP 200 OK`: Returns booking details as a JSON object.
+      ```json
+      {
+          "booking_id": 1,
+          "bus_name": "Bus 101",
+          "departure_time": "2023-10-01T10:00:00Z",
+          "arrival_time": "2023-10-01T14:00:00Z",
+          "price": 5000.0,
+          "seats_booked": 2,
+          "user_email": "user@example.com"
+      }
+      ```
+
+    ### Error Responses:
+    - `HTTP 404 Not Found`: If the booking does not exist or is not associated with the logged-in user.
+    - `HTTP 403 Forbidden`: If the user is not authenticated.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_id):
+        if request.user.is_staff:
+            booking = get_object_or_404(Booking, id=booking_id)
+        else:
+            booking = get_object_or_404(Booking, id=booking_id, user=request.user)
+        
+        data = {
+            'booking_id': booking.id,
+            'bus_name': booking.bus.name,
+            'departure_time': booking.bus.departure_time,
+            'arrival_time': booking.bus.arrival_time,
+            'price': booking.bus.price,
+            'seats_booked': booking.seats,
+            'user_email': booking.user.email,
+        }
+        return JsonResponse(data, status=200)
 
 
 class UserAuthView(APIView):
@@ -686,7 +787,6 @@ class UserAuthView(APIView):
     def get(self, request):
         return JsonResponse({'message': 'Please use POST to log in.'}, status=200)
 
-    
     def clean_request_data(self, data):
         cleaned_data = {}
         for key, value in data.items():
@@ -699,8 +799,7 @@ class UserAuthView(APIView):
 
 class UserLogoutView(APIView):
     permission_classes = [AllowAny]
-
-
+    
     def post(self, request):
         try:
             token = request.data.get('token') 
@@ -756,21 +855,26 @@ class CreateDestinationView(generics.CreateAPIView):
     queryset = Destination.objects.all()
     serializer_class = DestinationSerializer
 
+
 class DestinationDetailView(generics.RetrieveAPIView):
     queryset = Destination.objects.all()
     serializer_class = DestinationSerializer
+
 
 class DestinationListView(generics.ListAPIView):
     queryset = Destination.objects.all()
     serializer_class = DestinationSerializer
 
+
 class RouteListView(ListAPIView):
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
 
+
 class RouteDetailView(RetrieveAPIView):
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
+
 
 class RouteCreateView(APIView):
     permission_classes = [IsAuthenticated]  

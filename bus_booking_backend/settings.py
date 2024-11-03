@@ -15,25 +15,24 @@ import os
 import logging
 from corsheaders.defaults import default_headers
 from datetime import timedelta
+from decouple import config
+import environ
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = False
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-@*d0(4)z&)d#9ctm6f(@7vmf_iqil-9#2-n_g7k0yl&o9*#wpl'
-# EasyPay Mobile Money API settings
 EASYPAY_MOBILE_MONEY_API_KEY = 'your_mobile_money_api_key'
 EASYPAY_MOBILE_MONEY_API_URL = 'https://api.easypay.co.ug/mobilemoney'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+
+DEBUG = False
+
 
 ALLOWED_HOSTS = ['*']
 
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -53,6 +52,7 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = 'bookings.User'
 
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -69,6 +69,7 @@ MIDDLEWARE = [
 
 
 ROOT_URLCONF = 'bus_booking_backend.urls'
+
 
 TEMPLATES = [
     {
@@ -89,9 +90,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'bus_booking_backend.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -99,9 +97,6 @@ DATABASES = {
     }
 }
 
-
-# Password validation
-# https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -119,9 +114,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
@@ -130,9 +122,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/static/'
@@ -172,6 +161,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://web-production-84665.up.railway.app'  
 ]
 
+
 CORS_ALLOWED_ORIGINS = [
     'https://web-production-84665.up.railway.app',  
     'http://localhost:3000',                        
@@ -181,27 +171,39 @@ CORS_ALLOWED_ORIGINS = [
 
 ]
 
+
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'x-api-key',  
 ]
+
 
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = False  
 CSRF_USE_SESSIONS = False 
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'  
 
+
 logger = logging.getLogger('django.security.csrf')
 logger.setLevel(logging.DEBUG)
 
+
 LOGIN_URL = '/api/login/'
 
+
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'lematia1accord1@gmail.com'
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+
+
+EASYPAY_CLIENT_ID = 'your_client_id'
+EASYPAY_CLIENT_SECRET = 'your_client_secret'
+
 
 
 

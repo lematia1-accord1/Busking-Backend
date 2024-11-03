@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.utils.timezone import now
 from django.conf import settings
 from django.contrib.auth import get_user_model
-
 from .models import Booking, Payment, Bus
 from .easypay_mobile_money import EasyPayMobileMoney
 

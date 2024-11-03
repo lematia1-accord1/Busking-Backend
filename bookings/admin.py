@@ -14,6 +14,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import User
 User = get_user_model()
 
+
 class MerchantAdmin(admin.ModelAdmin):
     list_display = ('user', 'bus_company_name', 'user_email', 'user_is_active', 'approved', 'is_default')
     fields = ('user', 'bus_company_name', 'approved', 'is_default') 
@@ -39,6 +40,7 @@ class MerchantAdmin(admin.ModelAdmin):
         return obj.user.is_active
     user_is_active.short_description = 'Active Status'
 
+
 class CustomAdminSite(admin.AdminSite):
     def has_permission(self, request):
         return request.user.is_active and request.user.is_superuser
@@ -58,6 +60,7 @@ class BusRoutesFilter(admin.SimpleListFilter):
         if self.value():
             return queryset.filter(bus_routes__id__exact=self.value())
         return queryset
+
 
 class BusAdmin(admin.ModelAdmin):
     list_display = ('name', 'merchant', 'license_plate', 'total_seats', 'available_seats', 'departure_time', 'arrival_time', 'bus_routes')
@@ -157,6 +160,7 @@ class PaymentStatusFilter(admin.SimpleListFilter):
         if self.value():
             return queryset.filter(status=self.value())
         return queryset
+    
     
 class PaymentAdmin(admin.ModelAdmin):
     list_display = ('user', 'booking', 'amount', 'transaction_id', 'timestamp', 'refunded', 'status')

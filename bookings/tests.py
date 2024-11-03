@@ -10,6 +10,8 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 import json
+from .views import calculate_total_amount, generate_transaction_id, create_booking
+from decimal import Decimal
 
 
 User = get_user_model()
@@ -166,6 +168,7 @@ class AdminAuthenticationTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Admin Dashboard")
 
+
 class CsrfTestCase(APITestCase):
     def setUp(self):
         User = get_user_model()
@@ -199,7 +202,6 @@ class CsrfTestCase(APITestCase):
         self.assertEqual(response.status_code, 201)
 
         self.assertEqual(Bus.objects.count(), 1)
-
 
 
 class CsrfTestCase(TestCase):
@@ -332,6 +334,7 @@ class BusCreateViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('license_plate', response.data)  
 
+
 class MerchantTestCase(TestCase):
     def setUp(self):
         self.user1 = User.objects.create_user(username='testuser1', password='testpassword1')
@@ -347,6 +350,7 @@ class MerchantTestCase(TestCase):
     def test_duplicate_merchant_creation(self):
         with self.assertRaises(Exception):
             Merchant.objects.create(user=self.user1)
+
 
 class UserAuthViewTests(APITestCase):
     def test_login(self):
@@ -474,9 +478,7 @@ class ChangePasswordViewTest(TestCase):
         response = self.client.post('/api/change_password/', {}, format='json')  
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-
-
+        
     def test_missing_password_fields(self):
         """Test if missing password fields return the appropriate error."""
         data = json.dumps({
@@ -523,3 +525,139 @@ class ChangePasswordViewTest(TestCase):
         
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('newpassword123'))
+
+
+class BookingTests(TestCase):
+
+    def setUp(self):
+        self.bus = Bus.objects.create(
+            price=Decimal('50.00'),
+            total_seats=30,
+            available_seats=30,
+            name='Test Bus',
+            license_plate='XYZ 123',
+        )
+
+    def test_calculate_total_amount(self):
+        """Test calculating total amount for a given bus and number of seats."""
+        number_of_seats = 2
+        expected_total = self.bus.price * Decimal(number_of_seats)
+        self.assertEqual(calculate_total_amount(self.bus.id, number_of_seats), expected_total)
+
+    def test_generate_transaction_id(self):
+        """Test generating a unique transaction ID."""
+        transaction_id_1 = generate_transaction_id()
+        transaction_id_2 = generate_transaction_id()
+        self.assertNotEqual(transaction_id_1, transaction_id_2)
+        self.assertIsNotNone(transaction_id_1)
+        self.assertIsNotNone(transaction_id_2)
+
+    @patch('path.to.your.module.easy_pay')
+    def test_create_booking(self, mock_easy_pay):
+        """Test creating a booking."""
+        mock_easy_pay.initiate_transaction.return_value = {'status': 'success', 'transaction_id': 'trans_123'}
+
+        user = self.create_user()
+
+        data = {
+            'phone_number': '0788344746',
+            'pickup_time': '10:00 AM',
+            'name': 'John Doe',
+            'email': 'john@example.com',
+            'phone': '0788344746'
+        }
+
+        booking, payment_response = create_booking(self.bus.id, 2, user, data, mock_easy_pay, 100.00)
+
+        self.assertIsNotNone(booking)
+        self.assertEqual(booking.user, user)
+        self.assertEqual(booking.bus, self.bus)
+        self.assertEqual(booking.seats, 2)
+
+        self.assertEqual(payment_response['status'], 'success')
+        self.assertEqual(payment_response['transaction_id'], 'trans_123')
+
+    def create_user(self):
+        """Helper method to create a user for testing."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        return User.objects.create_user(username='testuser', password='testpass')
+
+
+class BookBusViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='testuser', password='password')
+        self.client.login(username='testuser', password='password')
+
+        self.bus = Bus.objects.create(
+            name='Test Bus',
+            total_seats=10,
+            available_seats=10,
+            license_plate='XYZ 123',
+        )
+
+        self.url = reverse('book-bus', kwargs={'bus_id': self.bus.id})  
+
+    def test_book_bus_success(self):
+        with patch('path.to.EasyPayMobileMoney.initiate_transaction') as mock_payment:
+            mock_payment.return_value = {'status': 'success'}
+
+            payload = {
+                'number_of_seats': 2,
+                'pickup_time': '10:00 AM',
+                'pickup_location': 'Downtown',
+                'destination': 'Airport',
+                'phone_number': '25675XXXXXXX'
+            }
+
+            response = self.client.post(self.url, data=json.dumps(payload), content_type='application/json')
+
+            self.assertEqual(response.status_code, 201)
+            self.assertIn('booking_id', response.json())
+            self.assertEqual(Booking.objects.count(), 1)
+
+    def test_book_bus_invalid_json(self):
+        response = self.client.post(self.url, data='invalid_json', content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'Invalid JSON format'})
+
+    def test_book_bus_missing_fields(self):
+        payload = {
+            'number_of_seats': 2,
+            'pickup_location': 'Downtown',
+            'destination': 'Airport',
+            'phone_number': '25675XXXXXXX'
+        }
+
+        response = self.client.post(self.url, data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'pickup_time is required.'})
+
+    def test_book_bus_insufficient_seats(self):
+        self.bus.available_seats = 1
+        self.bus.save()
+
+        payload = {
+            'number_of_seats': 2,
+            'pickup_time': '10:00 AM',
+            'pickup_location': 'Downtown',
+            'destination': 'Airport',
+            'phone_number': '25675XXXXXXX'
+        }
+
+        response = self.client.post(self.url, data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'Not enough seats available.'})
+
+    def test_book_bus_invalid_pickup_time_format(self):
+        payload = {
+            'number_of_seats': 2,
+            'pickup_time': 'invalid_time',
+            'pickup_location': 'Downtown',
+            'destination': 'Airport',
+            'phone_number': '25675XXXXXXX'
+        }
+
+        response = self.client.post(self.url, data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'Invalid pickup_time format.'})

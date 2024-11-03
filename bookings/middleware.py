@@ -19,6 +19,7 @@ class CSRFMiddlewareDebug(MiddlewareMixin):
         print("CSRF Token in request:", request.META.get('CSRF_COOKIE'))
         return None
     
+
 class CustomCSRFMiddleware(CsrfViewMiddleware):
     def process_view(self, request, view_func, view_args, view_kwargs):
         if request.method in ['POST', 'PUT', 'DELETE']:  
@@ -27,6 +28,7 @@ class CustomCSRFMiddleware(CsrfViewMiddleware):
 
     def _reject(self, request, reason):
         return JsonResponse({'error': 'CSRF token missing or incorrect.'}, status=403)
+
 
 class RemoveNewlinesMiddleware:
     def __init__(self, get_response):
@@ -40,6 +42,7 @@ class RemoveNewlinesMiddleware:
         
         response = self.get_response(request)
         return response
+
 
 class CsrfTestCase(TestCase):
     def setUp(self):
