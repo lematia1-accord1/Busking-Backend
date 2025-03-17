@@ -102,5 +102,10 @@ urlpatterns = [
 
     path('destinations/', DestinationListView.as_view(), name='destination-list'),
     path('destinations/create/', CreateDestinationView.as_view(), name='create-destination'),
-    path('destinations/<int:pk>/', DestinationDetailView.as_view(), name='destination-detail'),  
+    path('destinations/<int:pk>/', DestinationDetailView.as_view(), name='destination-detail'), 
+
+    path('payment-page/', views.payment_page, name='payment_page'),
+    path('create-payment-intent/', views.create_payment_intent, name='create_payment_intent'),
+    path('stripe-webhook/', views.stripe_webhook, name='stripe_webhook'),
+ 
 ]

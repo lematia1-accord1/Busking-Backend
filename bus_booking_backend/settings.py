@@ -205,5 +205,10 @@ EASYPAY_CLIENT_ID = 'your_client_id'
 EASYPAY_CLIENT_SECRET = 'your_client_secret'
 
 
+STRIPE_SECRET_KEY = 'your-secret-key'
+STRIPE_PUBLISHABLE_KEY = 'your-publishable-key'
+STRIPE_WEBHOOK_SECRET = 'your-webhook-secret'  
+
+
 
 

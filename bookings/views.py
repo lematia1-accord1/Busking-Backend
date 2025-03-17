@@ -45,6 +45,8 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from django.shortcuts import render
+import stripe
 
 
 from .models import Bus, Merchant, Booking, Customer, Payment
@@ -886,4 +888,55 @@ class RouteCreateView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
+def payment_page(request):
+    # Render the payment page with your publishable key
+    context = {
+        "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+    }
+    return render(request, 'payment_page.html', context)
+
+
+@csrf_exempt
+def create_payment_intent(request):
+    try:
+        # Get the amount from the request body or set a fixed amount
+        data = json.loads(request.body)
+        amount = data.get('amount', 1000)  # Example amount in cents ($10.00)
+
+        # Create a PaymentIntent with the specified amount
+        intent = stripe.PaymentIntent.create(
+            amount=amount,
+            currency='usd',
+            payment_method_types=['card'],
+        )
+
+        return JsonResponse({
+            'clientSecret': intent['client_secret']
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    payload = request.body
+    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+    event = None
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError:
+        return HttpResponse(status=400)
+    except stripe.error.SignatureVerificationError:
+        return HttpResponse(status=400)
+
+    # Handle the event
+    if event['type'] == 'payment_intent.succeeded':
+        payment_intent = event['data']['object']
+        # Handle successful payment intent here
+
+    return HttpResponse(status=200)
