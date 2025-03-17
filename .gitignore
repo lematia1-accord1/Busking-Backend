@@ -3,3 +3,4 @@ projectrequiremeents
 *.pyc
 venv/*
 __pycache__
+.env
